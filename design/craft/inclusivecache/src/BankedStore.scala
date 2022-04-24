@@ -200,7 +200,4 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
   assert(Cat(decodeDX.reverse) === decodeD)
 
   io.sourceD_rdat.data := decodeD
-
-  private def banks = cc_banks.zipWithIndex.map{ case (_, i) => "\"" + s"cc_banks_$i" + "\"" }.mkString(",")
-  def json: String = s"""{"widthBytes":${params.micro.writeBytes},"mem":[${banks}]}"""
 }
