@@ -46,7 +46,7 @@ class SourceB(params: InclusiveCacheParameters) extends Module with HasTLDump
     io.b.bits.dump
   }
   */
-    
+
   when (io.req.fire()) {
     DebugPrint(params, "sourceB req ")
     io.req.bits.dump
@@ -63,7 +63,7 @@ class SourceB(params: InclusiveCacheParameters) extends Module with HasTLDump
     val remain_clr = Wire(init = UInt(0, width=params.clientBits))
     remain := (remain | remain_set) & ~remain_clr
 
-    val busy = remain.orR()
+    val busy = remain.orR
     // 哪些是要处理的，如果有busy的话就用remain，否则就直接用clients
     val todo = Mux(busy, remain, io.req.bits.clients)
     // next是随机选中的，下一个要处理的？

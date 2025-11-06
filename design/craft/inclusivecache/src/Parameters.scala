@@ -19,7 +19,7 @@ package sifive.blocks.inclusivecache
 
 import Chisel._
 import chisel3.internal.sourceinfo.SourceInfo
-import freechips.rocketchip.config._
+import org.chipsalliance.cde.config._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
@@ -311,4 +311,4 @@ object InclusiveCacheParameters
     2 + out_mshrs(cache, micro)
 }
 
-class InclusiveCacheBundle(params: InclusiveCacheParameters) extends GenericParameterizedBundle(params)
+class InclusiveCacheBundle(params: InclusiveCacheParameters) extends Bundle

@@ -366,7 +366,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
       RegNext(cut.io.need_to_schedule))
   }
 
-  cut.io.need_to_schedule := TrackWire(mshr_request_select.orR())
+  cut.io.need_to_schedule := TrackWire(mshr_request_select.orR)
   cut.io.select.mshrReqValids := TrackWire(mshr_request_select)
   cut.io.select.mshrStatus := scheduleStatus_select
   cut.io.select.mshrSelectOH := TrackWire(mshr_selectOH_select)
@@ -374,7 +374,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
 
 
   // When an MSHR wins the schedule, it has lowest priority next time
-  when (s_issue && cut.io.issue.mshrReqValids.orR()) {
+  when (s_issue && cut.io.issue.mshrReqValids.orR) {
     robin_filter := ~rightOR(cut.io.issue.mshrSelectOH)
   }
 
@@ -439,7 +439,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
   val request_set = TrackWire(request.bits.set)
   val setMatches = Cat(mshrs.map { m => m.io.status.valid && m.io.status.bits.set === request_set }.reverse)
   // 没有set match的
-  val alloc = !setMatches.orR() // NOTE: no matches also means no BC or C pre-emption on this set
+  val alloc = !setMatches.orR // NOTE: no matches also means no BC or C pre-emption on this set
   // If a same-set MSHR says that requests of this type must be blocked (for bounded time), do it
   // 这个block的意思是，现在要把这个给block住
   // prio是啥呢？
@@ -492,7 +492,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
   // 如果blockB是true，就意味着有人要block它。
   // 为什么有人要block它，它也进不了queue呢？
   // 那估计这边的block就是挂在总线上不拿下来的意思？
-  val queue = lowerMatches.orR() && !nestB && !nestC && !blockB && !blockC
+  val queue = lowerMatches.orR && !nestB && !nestC && !blockB && !blockC
 
   if (!params.lastLevel) {
     params.ccover(request.valid && blockB, "SCHEDULER_BLOCKB", "Interlock B request while resolving set conflict")
@@ -519,10 +519,10 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
   // 要和可能选择是从之前的队列里面给pop一项出来
   val mshr_selectOH_issue = cut.io.issue.mshrSelectOH
   val selected_requests = Cat(mshr_selectOH_issue, mshr_selectOH_issue, mshr_selectOH_issue) & requests.io.valid
-  val a_pop = selected_requests((0 + 1) * params.mshrs - 1, 0 * params.mshrs).orR()
-  val b_pop = selected_requests((1 + 1) * params.mshrs - 1, 1 * params.mshrs).orR()
-  val c_pop = selected_requests((2 + 1) * params.mshrs - 1, 2 * params.mshrs).orR()
-  val bypassMatches = (mshr_selectOH_issue & lowerMatches1).orR() &&
+  val a_pop = selected_requests((0 + 1) * params.mshrs - 1, 0 * params.mshrs).orR
+  val b_pop = selected_requests((1 + 1) * params.mshrs - 1, 1 * params.mshrs).orR
+  val c_pop = selected_requests((2 + 1) * params.mshrs - 1, 2 * params.mshrs).orR
+  val bypassMatches = (mshr_selectOH_issue & lowerMatches1).orR &&
                       Mux(c_pop || request.bits.prio(2), !c_pop, Mux(b_pop || request.bits.prio(1), !b_pop, !a_pop))
   val may_pop = a_pop || b_pop || c_pop
   val bypass = request.valid && queue && bypassMatches
@@ -594,7 +594,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
 
   // Is there an MSHR free for this request?
   val mshr_validOH = Cat(mshrs.map(_.io.status.valid).reverse)
-  val mshr_free = ((~mshr_validOH).asUInt & prioFilter).orR()
+  val mshr_free = ((~mshr_validOH).asUInt & prioFilter).orR
 
   // Fanout the request to the appropriate handler (if any)
   val bypassQueue = schedule_issue.reload && bypassMatches
@@ -624,7 +624,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
   requests.io.push.valid := request.valid && queue && (s_issue && !bypassQueue)
   when (requests.io.push.fire()) {
     assert(request.fire())
-    DebugPrint(params, "requests push for mshr %d prio %b\n", OHToUInt(lowerMatches1), request.bits.prio.asUInt())
+    DebugPrint(params, "requests push for mshr %d prio %b\n", OHToUInt(lowerMatches1), request.bits.prio.asUInt)
   }
   requests.io.push.bits.data  := request.bits
   requests.io.push.bits.index := Mux1H(
@@ -724,7 +724,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
   sinkD  .io.grant_safe := sourceD.io.grant_safe
 
   val setConflict = requests.io.push.fire()
-  val mshrUseBypass = mshr_selectOH_issue.orR() && bypass
+  val mshrUseBypass = mshr_selectOH_issue.orR && bypass
   XSPerfAccumulate(params, "nSetConflict", setConflict)
   XSPerfAccumulate(params, "nMSHRBypass", mshrUseBypass)
 

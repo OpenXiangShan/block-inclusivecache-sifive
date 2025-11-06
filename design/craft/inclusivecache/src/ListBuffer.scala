@@ -26,7 +26,7 @@ case class ListBufferParameters[T <: Data](gen: T, queues: Int, entries: Int, by
   val entryBits = log2Up(entries)
 }
 
-class ListBufferPush[T <: Data](params: ListBufferParameters[T]) extends GenericParameterizedBundle(params)
+class ListBufferPush[T <: Data](params: ListBufferParameters[T]) extends Bundle
 {
   val index = UInt(width = params.queueBits)
   val data  = params.gen.asOutput
@@ -72,7 +72,7 @@ class ListBuffer[T <: Data](params: ListBufferParameters[T]) extends Module
   val push_valid = valid(io.push.bits.index)
 
   // 看是否还有空的entry
-  io.push.ready := !used.andR()
+  io.push.ready := !used.andR
   when (io.push.fire()) {
     // 进入哪个queue
     valid_set := UIntToOH(io.push.bits.index, params.queues)
@@ -150,7 +150,7 @@ class ListBufferLite[T <: Data](params: ListBufferParameters[T]) extends Module
     valid_set := UIntToOH(io.push.bits.index, params.queues)
     // 数据局写入
     //data.write(io.push_onehot_index, io.push.bits.data)
-    (data zip io.push_onehot_index.asBools()) foreach { case (element, enable) =>
+    (data zip io.push_onehot_index.asBools) foreach { case (element, enable) =>
       when (enable) {
         element := io.push.bits.data
       }
@@ -161,7 +161,7 @@ class ListBufferLite[T <: Data](params: ListBufferParameters[T]) extends Module
 
   // Bypass push data to the peek port
   //io.data := data.read(io.pop_onehot_index)
-  io.data := Mux1H(io.pop_onehot_index.asBools(), data)
+  io.data := Mux1H(io.pop_onehot_index.asBools, data)
   io.valid := valid
 
   // It is an error to pop something that is not valid

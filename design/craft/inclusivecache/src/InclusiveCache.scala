@@ -17,11 +17,10 @@
 
 package sifive.blocks.inclusivecache
 
-import chisel3._
-import freechips.rocketchip.config._
+import Chisel._
+import chisel3.WireInit
+import org.chipsalliance.cde.config._
 import freechips.rocketchip.diplomacy._
-
-
 import freechips.rocketchip.regmapper._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.subsystem.BankedL2Key
@@ -119,7 +118,8 @@ class InclusiveCache(
     concurrency = 1, // Only one flush at a time (else need to track who answers)
     beatBytes   = c.beatBytes)}
 
-  lazy val module = new LazyModuleImp(this) {
+  lazy val module = new Impl
+  class Impl extends LazyModuleImp(this) {
     val PAddrBits = 40
     val io = IO(new PrefetcherIO(PAddrBits))
 

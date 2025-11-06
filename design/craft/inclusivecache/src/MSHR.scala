@@ -24,10 +24,7 @@ import freechips.rocketchip.tilelink._
 import TLPermissions._
 import TLMessages._
 import MetaData._
-import chisel3.MultiIOModule
-import chisel3.internal.naming.chiselName
 
-@chiselName
 class DummyMux[T <: Data](gen: T) extends Module
 {
   val io = IO(new Bundle {
@@ -41,7 +38,6 @@ class DummyMux[T <: Data](gen: T) extends Module
 }
 
 object DummyMux {
-  @chiselName
   def apply[T <: Data](cond: Bool, A: T, B: T): T = {
     val mux = Module(new DummyMux(A))
     mux.io.cond := cond
@@ -56,20 +52,17 @@ class PrefetcherAcquire(addressBits: Int) extends Bundle
   val address = UInt(width = addressBits)
   val write   = Bool() // read or write
   val hit     = Bool()
-  override def cloneType = (new PrefetcherAcquire(addressBits)).asInstanceOf[this.type]
 }
 
 class PrefetcherRelease(addressBits: Int) extends Bundle
 {
   val address = UInt(width = addressBits)
-  override def cloneType = (new PrefetcherRelease(addressBits)).asInstanceOf[this.type]
 }
 
 class PrefetcherIO(addressBits: Int) extends Bundle
 {
   val acquire = Valid(new PrefetcherAcquire(addressBits))
   val release = Valid(new PrefetcherRelease(addressBits))
-  override def cloneType = (new PrefetcherIO(addressBits)).asInstanceOf[this.type]
 }
 
 class MSHRPerformanceCounters extends Bundle

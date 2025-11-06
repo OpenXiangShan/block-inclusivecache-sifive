@@ -18,7 +18,7 @@
 package sifive.blocks.inclusivecache
 
 import Chisel._
-import freechips.rocketchip.config._
+import org.chipsalliance.cde.config._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.ReplacementPolicy
@@ -164,7 +164,7 @@ class Directory(params: InclusiveCacheParameters) extends Module
   val hits = Cat(ways.zipWithIndex.map { case (w, i) =>
     w.tag === tag && w.state =/= INVALID && (!setQuash || UInt(i) =/= bypass.way)
   }.reverse)
-  val hit = hits.orR()
+  val hit = hits.orR
   val hitWay = OHToUInt(hits)
 
   val wen1 = RegNext(write.fire(), init = false.B)

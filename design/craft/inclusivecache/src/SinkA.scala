@@ -63,12 +63,12 @@ class SinkA(params: InclusiveCacheParameters) extends Module with HasTLDump
     io.a.bits.dump(params)
   }
   */
-    
+
   when (io.pb_pop.fire()){
     DebugPrint(params, "sinkA pb_pop ")
     io.pb_pop.bits.dump
   }
-    
+
   /*
   DebugPrint(params, "sinkA pb_beat ")
   io.pb_beat.dump
@@ -89,7 +89,7 @@ class SinkA(params: InclusiveCacheParameters) extends Module with HasTLDump
   val lists_clr = Wire(init = UInt(0, width = params.putLists))
   lists := (lists | lists_set) & ~lists_clr
 
-  val free = !lists.andR()
+  val free = !lists.andR
   // 还是有点不知道这个left OR是用来干啥的？
   // 需要专家来解读一下
   val freeOH = ~(leftOR(~lists) << 1) & ~lists
