@@ -17,7 +17,8 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 import freechips.rocketchip.util._
 
 case class ListBufferParameters[T <: Data](gen: T, queues: Int, entries: Int, bypass: Boolean)
@@ -28,32 +29,32 @@ case class ListBufferParameters[T <: Data](gen: T, queues: Int, entries: Int, by
 
 class ListBufferPush[T <: Data](params: ListBufferParameters[T]) extends Bundle
 {
-  val index = UInt(width = params.queueBits)
-  val data  = params.gen.asOutput
+  val index = UInt(params.queueBits.W)
+  val data  = Output(params.gen)
 }
 
 class ListBuffer[T <: Data](params: ListBufferParameters[T]) extends Module
 {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     // push is visible on the same cycle; flow queues
-    val push  = Decoupled(new ListBufferPush(params)).flip
-    val valid = UInt(width = params.queues)
-    val pop   = Valid(UInt(width = params.queueBits)).flip
-    val data  = params.gen.asOutput
-  }
+    val push  = Flipped(Decoupled(new ListBufferPush(params)))
+    val valid = UInt(params.queues.W)
+    val pop   = Flipped(Valid(UInt(params.queueBits.W)))
+    val data  = Output(params.gen)
+  })
 
   // queues估计是总共有多少queue
   // entrys是总共有多少entry
   // 然后每个entry就是T
   // 哪几个queue是valid的？
-  val valid = RegInit(UInt(0, width=params.queues))
+  val valid = RegInit(0.U(params.queues.W))
   // 每个queue的head还有tail
-  val head  = Mem(params.queues, UInt(width = params.entryBits))
-  val tail  = Mem(params.queues, UInt(width = params.entryBits))
+  val head  = Mem(params.queues, UInt(params.entryBits.W))
+  val tail  = Mem(params.queues, UInt(params.entryBits.W))
   // 但是这边的used, next, data为啥只有entries个呢？有可能是所有mshr共享entries的？
-  val used  = RegInit(UInt(0, width=params.entries))
+  val used  = RegInit(0.U(params.entries.W))
   // 这个怎么有一种链表的感觉？
-  val next  = Mem(params.entries, UInt(width = params.entryBits))
+  val next  = Mem(params.entries, UInt(params.entryBits.W))
   // 这个才是最终的data
   val data  = Mem(params.entries, params.gen)
 
@@ -61,10 +62,10 @@ class ListBuffer[T <: Data](params: ListBufferParameters[T]) extends Module
   val freeOH = ~(leftOR(~used) << 1) & ~used
   val freeIdx = OHToUInt(freeOH)
 
-  val valid_set = Wire(init = UInt(0, width=params.queues))
-  val valid_clr = Wire(init = UInt(0, width=params.queues))
-  val used_set  = Wire(init = UInt(0, width=params.entries))
-  val used_clr  = Wire(init = UInt(0, width=params.entries))
+  val valid_set = WireInit(0.U(params.queues.W))
+  val valid_clr = WireInit(0.U(params.queues.W))
+  val used_set  = WireInit(0.U(params.entries.W))
+  val used_clr  = WireInit(0.U(params.entries.W))
 
   // 当前队列的队尾
   val push_tail = tail.read(io.push.bits.index)
@@ -107,7 +108,7 @@ class ListBuffer[T <: Data](params: ListBufferParameters[T]) extends Module
   }
 
   // Empty bypass changes no state
-  when (Bool(!params.bypass) || !io.pop.valid || pop_valid) {
+  when (!params.bypass.B || !io.pop.valid || pop_valid) {
     used  := (used  & ~used_clr)  | used_set
     valid := (valid & ~valid_clr) | valid_set
   }
@@ -116,30 +117,30 @@ class ListBuffer[T <: Data](params: ListBufferParameters[T]) extends Module
 
 class ListBufferLite[T <: Data](params: ListBufferParameters[T]) extends Module
 {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     // push is visible on the same cycle; flow queues
-    val push  = Decoupled(new ListBufferPush(params)).flip
-    val push_onehot_index = UInt(width = params.queues).asInput
-    val valid = UInt(width = params.queues)
-    val pop   = Valid(UInt(width = params.queueBits)).flip
-    val pop_onehot_index = UInt(width = params.queues).asInput
-    val data  = params.gen.asOutput
-    val dataFanout = Vec(params.queues, data).asOutput
-  }
+    val push  = Flipped(Decoupled(new ListBufferPush(params)))
+    val push_onehot_index = Input(UInt(params.queues.W))
+    val valid = UInt(params.queues.W)
+    val pop   = Flipped(Valid(UInt(params.queueBits.W)))
+    val pop_onehot_index = Input(UInt(params.queues.W))
+    val data  = Output(params.gen)
+    val dataFanout = Output(Vec(params.queues, data))
+  })
 
   // queues估计是总共有多少queue
   // entrys是总共有多少entry
   // 然后每个entry就是T
   // 哪几个queue是valid的？
-  val valid = RegInit(UInt(0, width=params.queues))
-  //val head  = Mem(params.queues, UInt(width = params.entryBits))
-  //val tail  = Mem(params.queues, UInt(width = params.entryBits))
+  val valid = RegInit(0.U(params.queues.W))
+  //val head  = Mem(params.queues, UInt(params.entryBits.W))
+  //val tail  = Mem(params.queues, UInt(params.entryBits.W))
   //val data  = Mem(params.queues, params.gen)
   val data = Reg(Vec(params.queues, params.gen))
   io.dataFanout := data
 
-  val valid_set = Wire(init = UInt(0, width=params.queues))
-  val valid_clr = Wire(init = UInt(0, width=params.queues))
+  val valid_set = WireInit(0.U(params.queues.W))
+  val valid_clr = WireInit(0.U(params.queues.W))
 
   // 看是否还有空的entry
   val push_ready_origin: UInt = ~valid(io.push.bits.index)

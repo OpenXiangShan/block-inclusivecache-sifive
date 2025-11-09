@@ -17,7 +17,8 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
 import TLMessages._
@@ -26,19 +27,19 @@ import TLPermissions._
 
 class AtomicsLocal(params: TLBundleParameters) extends Module
 {
-  val io = new Bundle {
-    val write    = Bool().flip // ignore opcode
-    val a        = new TLBundleA(params).flip
-    val data_in  = UInt(width = params.dataBits).flip
-    val data_out = UInt(width = params.dataBits)
-  }
+  val io = IO(new Bundle {
+    val write    = Flipped(Bool()) // ignore opcode
+    val a        = Flipped(new TLBundleA(params))
+    val data_in  = Flipped(UInt(params.dataBits.W))
+    val data_out = UInt(params.dataBits.W)
+  })
 
   // Arithmetic, what to do
   val adder    = io.a.param(2)
   val unsigned = io.a.param(1)
   val take_max = io.a.param(0)
 
-  val signBit = io.a.mask & Cat(UInt(1), ~io.a.mask >> 1)
+  val signBit = io.a.mask & Cat(true.B, ~io.a.mask >> 1)
   val inv_d = Mux(adder, io.data_in, ~io.data_in)
   val sum = (FillInterleaved(8, io.a.mask) & io.a.data) + inv_d
   def sign(x: UInt): Bool = (Cat(x.asBools.grouped(8).map(_.last).toList.reverse) & signBit).orR
@@ -50,17 +51,17 @@ class AtomicsLocal(params: TLBundleParameters) extends Module
   val pick_a = take_max === a_bigger
 
   // Logical, what to do
-  val lut = MuxLookup(io.a.param(1, 0), 0x6.U, List(
+  val lut = MuxLookup(io.a.param(1, 0), 0x6.U)(List(
     0.U -> 0x6.U,
     1.U -> 0xe.U,
     2.U -> 0x8.U,
     3.U -> 0xc.U
   ))
-  val lutx = Vec(Seq(
-    UInt(0x6),   // XOR
-    UInt(0xe),   // OR
-    UInt(0x8),   // AND
-    UInt(0xc)))( // SWAP
+  val lutx = VecInit(Seq(
+    0x6.U,   // XOR
+    0xe.U,   // OR
+    0x8.U,   // AND
+    0xc.U))( // SWAP
     io.a.param(1,0))
   assert(lutx === lut)
 
@@ -69,37 +70,37 @@ class AtomicsLocal(params: TLBundleParameters) extends Module
   }.reverse)
 
   // Operation, what to do? (0=d, 1=a, 2=sum, 3=logical)
-  val op = MuxLookup(io.a.opcode, 0.U, List(
+  val op = MuxLookup(io.a.opcode, 0.U)(List(
     0.U -> 1.U,
     1.U -> 1.U,
-    2.U -> Mux(adder, UInt(2), Mux(pick_a, UInt(1), UInt(0))), // ArithmeticData
+    2.U -> Mux(adder, 2.U, Mux(pick_a, 1.U, 0.U)), // ArithmeticData
     3.U -> 3.U
   ))
-  val opx = Vec(Seq(
-    UInt(1),   // PutFullData
-    UInt(1),   // PutPartialData
-    Mux(adder, UInt(2), Mux(pick_a, UInt(1), UInt(0))), // ArithmeticData
-    UInt(3),   // LogicalData
-    UInt(0),   // Get
-    UInt(0),   // Hint
-    UInt(0),   // AcquireBlock
-    UInt(0)))( // AcquirePerm
+  val opx = VecInit(Seq(
+    1.U,   // PutFullData
+    1.U,   // PutPartialData
+    Mux(adder, 2.U, Mux(pick_a, 1.U, 0.U)), // ArithmeticData
+    3.U,   // LogicalData
+    0.U,   // Get
+    0.U,   // Hint
+    0.U,   // AcquireBlock
+    0.U))( // AcquirePerm
     io.a.opcode)
   assert(op === opx)
-  val select = Mux(io.write, UInt(1), op)
+  val select = Mux(io.write, 1.U, op)
 
   // Only the masked bytes can be modified
-  val selects = io.a.mask.asBools.map(b => Mux(b, select, UInt(0)))
+  val selects = io.a.mask.asBools.map(b => Mux(b, select, 0.U))
   io.data_out := Cat(selects.zipWithIndex.map { case (s, i) =>
     val list = Seq(io.data_in, io.a.data, sum, logical).map(_((i + 1) * 8 - 1, i * 8))
-    MuxLookup(s, 0.U, list.zipWithIndex.map { case (u, idx) => idx.U -> u })
+    MuxLookup(s, 0.U)(list.zipWithIndex.map { case (u, idx) => idx.U -> u })
   }.reverse)
 }
 
 class SourceDRequest(params: InclusiveCacheParameters) extends FullRequest(params)
 {
-  val sink = UInt(width = params.inner.bundle.sinkBits)
-  val way  = UInt(width = params.wayBits)
+  val sink = UInt(params.inner.bundle.sinkBits.W)
+  val way  = UInt(params.wayBits.W)
   val bad  = Bool()
   val uncached_get = Bool()
   override def dump() = {
@@ -110,8 +111,8 @@ class SourceDRequest(params: InclusiveCacheParameters) extends FullRequest(param
 
 class SourceDHazard(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val set = UInt(width = params.setBits)
-  val way = UInt(width = params.wayBits)
+  val set = UInt(params.setBits.W)
+  val way = UInt(params.wayBits.W)
   def dump() = {
     DebugPrint(params, "SourceDHazard: set: %x way: %x\n", set, way)
   }
@@ -119,8 +120,8 @@ class SourceDHazard(params: InclusiveCacheParameters) extends InclusiveCacheBund
 
 class PutBufferACEntry(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val data = UInt(width = params.inner.bundle.dataBits)
-  val mask = UInt(width = params.inner.bundle.dataBits/8)
+  val data = UInt(params.inner.bundle.dataBits.W)
+  val mask = UInt((params.inner.bundle.dataBits/8).W)
   val corrupt = Bool()
   def dump() = {
     DebugPrint(params, "PutBufferACEntry: data: %x mask: %x corrupt: %b\n", data, mask, corrupt)
@@ -129,36 +130,36 @@ class PutBufferACEntry(params: InclusiveCacheParameters) extends InclusiveCacheB
 
 class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
 {
-  val io = new Bundle {
-    val req = Decoupled(new SourceDRequest(params)).flip
+  val io = IO(new Bundle {
+    val req = Flipped(Decoupled(new SourceDRequest(params)))
     val d = Decoupled(new TLBundleD(params.inner.bundle))
     // Put data from SinkA
     val pb_pop = Decoupled(new PutBufferPop(params))
-    val pb_beat = new PutBufferAEntry(params).flip
+    val pb_beat = Flipped(new PutBufferAEntry(params))
     // Release data from SinkC
     // sourceD为什么要从sinkC这边拿数据呢？why？
     // put还好理解，这个就真的不太好理解了啊。
     val rel_pop  = Decoupled(new PutBufferPop(params))
-    val rel_beat = new PutBufferCEntry(params).flip
+    val rel_beat = Flipped(new PutBufferCEntry(params))
 
     // sourceD为什么要从sinkC这边拿数据呢？why？
     // put还好理解，这个就真的不太好理解了啊。
     val gnt_pop  = Decoupled(new GrantBufferPop(params))
-    val gnt_beat = new GrantBufferDEntry(params).flip
+    val gnt_beat = Flipped(new GrantBufferDEntry(params))
 
     // Access to the BankedStore
     val bs_radr = Decoupled(new BankedStoreInnerAddress(params))
-    val bs_rdat = new BankedStoreInnerDecoded(params).flip
+    val bs_rdat = Flipped(new BankedStoreInnerDecoded(params))
     // 所以对于put，amo之类的，数据写入是在这里完成的
     val bs_wadr = Decoupled(new BankedStoreInnerAddress(params))
     val bs_wdat = new BankedStoreInnerPoison(params)
     // Is it safe to evict/replace this way?
     // 具体这边是怎么同步的，还是不太明白
-    val evict_req  = new SourceDHazard(params).flip
+    val evict_req  = Flipped(new SourceDHazard(params))
     val evict_safe = Bool()
-    val grant_req  = new SourceDHazard(params).flip
+    val grant_req  = Flipped(new SourceDHazard(params))
     val grant_safe = Bool()
-  }
+  })
 
   when (io.req.fire) {
     DebugPrint(params, "SourceD req:")
@@ -280,16 +281,16 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
 
   // 所以这个其实就是阻塞的，一次只能处理一个请求
   // 显然s1在fire的当拍就启动了
-  val busy = RegInit(Bool(false))
-  val s1_block_r = RegInit(Bool(false))
+  val busy = RegInit(false.B)
+  val s1_block_r = RegInit(false.B)
   // 计数s1现在到了第几拍?
-  val s1_counter = RegInit(UInt(0, width = params.innerBeatBits))
+  val s1_counter = RegInit(0.U(params.innerBeatBits.W))
   // 这边又是一个锁存的经典案例
   val s1_req_reg = RegEnable(io.req.bits, !busy && io.req.valid)
   val s1_req = Mux(!busy, io.req.bits, s1_req_reg)
 
   // write bytes是sram存储的粒度，所以这个是要看每个sram block上是否有冲突？
-  val s1_x_bypass = Wire(UInt(width = beatBytes/writeBytes)) // might go from high=>low during stall
+  val s1_x_bypass = Wire(UInt((beatBytes/writeBytes).W)) // might go from high=>low during stall
   // 这个是什么意思？
   // 我们重点看这个什么时候变成true
   // s2_ready or
@@ -323,7 +324,7 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   //  PutFullData也是可能需要读的，当Put full data要写的内容粒度太小，比最小写粒度还要小的话，就需要先读一下
   //  TODO: 在这里把miss的get给过滤掉
   val s1_need_r = s1_mask.orR && s1_req.prio(0) && s1_req.opcode =/= Hint && !s1_grant &&
-                  (s1_req.opcode =/= PutFullData || s1_req.size < UInt(log2Ceil(writeBytes))) &&
+                  (s1_req.opcode =/= PutFullData || s1_req.size < log2Ceil(writeBytes).U) &&
                   !s1_uncached_get
 
   // valid这个信号是用来控制要不要读data array的
@@ -347,11 +348,11 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   val s1_retires = !s1_single // retire all operations with data in s3 for bypass (saves energy)
   // Alternatively: val s1_retires = s1_need_pb // retire only updates for bypass (less backpressure from WB)
   // 总共需要几beat
-  val s1_beats1 = Mux(s1_single, UInt(0), UIntToOH1(s1_req.size, log2Up(params.cache.blockBytes)) >> log2Ceil(beatBytes))
+  val s1_beats1 = Mux(s1_single, 0.U, UIntToOH1(s1_req.size, log2Up(params.cache.blockBytes)) >> log2Ceil(beatBytes))
   // 前面的是算出开始是第几拍，后面是配上现在传输到了第几拍
   val s1_beat = (s1_req.offset >> log2Ceil(beatBytes)) | s1_counter
   val s1_last = s1_counter === s1_beats1
-  val s1_first = s1_counter === UInt(0)
+  val s1_first = s1_counter === 0.U
 
   params.ccover(s1_block_r, "SOURCED_1_SRAM_HOLD", "SRAM read-out successful, but stalled by stage 2")
   params.ccover(!s1_latch_bypass, "SOURCED_1_BYPASS_HOLD", "Bypass match successful, but stalled by stage 2")
@@ -359,7 +360,7 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
 
   // 这边读数据要读多少拍呢？
   io.bs_radr.valid     := s1_valid_r
-  io.bs_radr.bits.noop := Bool(false)
+  io.bs_radr.bits.noop := false.B
   io.bs_radr.bits.way  := s1_req.way
   io.bs_radr.bits.set  := s1_req.set
   io.bs_radr.bits.beat := s1_beat
@@ -370,7 +371,7 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   // Make a queue to catch BS readout during stalls
   // 为什么是三项呢？
   // 这个是flow queue了，所以数据是可以从头拉到尾巴的
-  val queue = Module(new Queue(io.bs_rdat, 3, flow=true))
+  val queue = Module(new Queue(chiselTypeOf(io.bs_rdat), 3, flow=true))
   // banked data store是延迟两拍后出数
   queue.io.enq.valid := RegNext(RegNext(io.bs_radr.fire))
   queue.io.enq.bits := io.bs_rdat
@@ -379,16 +380,16 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   params.ccover(!queue.io.enq.ready, "SOURCED_1_QUEUE_FULL", "Filled SRAM skidpad queue completely")
 
   // s1_block_r是用来干啥的呢？
-  when (io.bs_radr.fire) { s1_block_r := Bool(true) }
-  when (io.req.valid) { busy := Bool(true) }
+  when (io.bs_radr.fire) { s1_block_r := true.B }
+  when (io.req.valid) { busy := true.B }
   when (s1_valid && s2_ready) {
     // 已经读了一拍了，开始读到下一拍
-    s1_counter := s1_counter + UInt(1)
-    s1_block_r := Bool(false)
+    s1_counter := s1_counter + 1.U
+    s1_block_r := false.B
     when (s1_last) {
       // 读到最后一拍了
-      s1_counter := UInt(0)
-      busy := Bool(false)
+      s1_counter := 0.U
+      busy := false.B
     }
   }
 
@@ -416,8 +417,8 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   // Fetch the request data
   // s2 latch指这一拍有数据从上面下来
   val s2_latch = s1_valid && s2_ready
-  val s2_full = RegInit(Bool(false))
-  val s2_valid_pb = RegInit(Bool(false))
+  val s2_full = RegInit(false.B)
+  val s2_valid_pb = RegInit(false.B)
   val s2_beat = RegEnable(s1_beat, s2_latch)
   val s2_bypass = RegEnable(s1_bypass, s2_latch)
   val s2_req = RegEnable(s1_req, s2_latch)
@@ -437,9 +438,9 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
     io.rel_beat.data)
 
   // 只有sinkA那里来的数据有mask吗？
-  s2_pdata_raw.mask    := Mux(s2_req.prio(0) && !s2_uncached_get, io.pb_beat.mask, ~UInt(0, width = params.inner.manager.beatBytes))
+  s2_pdata_raw.mask    := Mux(s2_req.prio(0) && !s2_uncached_get, io.pb_beat.mask, ~0.U(params.inner.manager.beatBytes.W))
   s2_pdata_raw.corrupt := Mux(s2_req.prio(0),
-    Mux(s2_uncached_get, Bool(false), io.pb_beat.corrupt),
+    Mux(s2_uncached_get, false.B, io.pb_beat.corrupt),
     io.rel_beat.corrupt)
 
   // 拿完数据后，就释放一拍
@@ -464,10 +465,10 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   val pb_ready = Mux(s2_req.prio(0),
     Mux(s2_uncached_get, io.gnt_pop.ready, io.pb_pop.ready),
     io.rel_pop.ready)
-  when (pb_ready) { s2_valid_pb := Bool(false) }
-  when (s2_valid && s3_ready) { s2_full := Bool(false) }
+  when (pb_ready) { s2_valid_pb := false.B }
+  when (s2_valid && s3_ready) { s2_full := false.B }
   when (s2_latch) { s2_valid_pb := s1_need_pb }
-  when (s2_latch) { s2_full := Bool(true) }
+  when (s2_latch) { s2_full := true.B }
 
   params.ccover(s2_valid && !s3_ready, "SOURCED_2_STALL", "Stage 2 pipeline blocked")
 
@@ -498,8 +499,8 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   // 这个latch就是fire的意思
   val s3_latch = s2_valid && s3_ready
   // 这个表明这一级是否有数据
-  val s3_full = RegInit(Bool(false))
-  val s3_valid_d = RegInit(Bool(false))
+  val s3_full = RegInit(false.B)
+  val s3_valid_d = RegInit(false.B)
   val s3_beat = RegEnable(s2_beat, s3_latch)
   val s3_bypass = RegEnable(s2_bypass, s3_latch)
   val s3_req = RegEnable(s2_req, s3_latch)
@@ -530,10 +531,10 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   // for BtoT, always returns GrantData
   // L1DCache depend on this feature
   val grant = GrantData
-  val resp_opcode = Vec(Seq(AccessAck, AccessAck, AccessAckData, AccessAckData, AccessAckData, HintAck, grant, Grant))
+  val resp_opcode = VecInit(Seq(AccessAck, AccessAck, AccessAckData, AccessAckData, AccessAckData, HintAck, grant, Grant))
 
   // No restrictions on the type of buffer used here
-  val d = Wire(io.d)
+  val d = Wire(chiselTypeOf(io.d))
   io.d <> params.micro.innerBuf.d(d)
 
   // s3 valid d，s3现在放到d上的message是否是valid
@@ -541,8 +542,8 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   d.bits.opcode  := Mux(s3_req.prio(0), resp_opcode(s3_req.opcode), ReleaseAck)
   d.bits.param   := Mux(s3_req.prio(0) && s3_acq,
     Mux(s3_req.param =/= NtoB, toT, toB),
-    if (params.verification) Mux(s3_uncached_get, s3_uncached_get_param, UInt(0))
-    else UInt(0))
+    if (params.verification) Mux(s3_uncached_get, s3_uncached_get_param, 0.U)
+    else 0.U)
   d.bits.size    := s3_req.size
   d.bits.source  := s3_req.source
   d.bits.sink    := s3_req.sink
@@ -562,10 +563,10 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   queue.io.deq.ready := s3_valid && s4_ready && s3_need_r
   assert (!s3_full || !s3_need_r || queue.io.deq.valid)
 
-  when (d.ready) { s3_valid_d := Bool(false) }
-  when (s3_valid && s4_ready) { s3_full := Bool(false) }
+  when (d.ready) { s3_valid_d := false.B }
+  when (s3_valid && s4_ready) { s3_full := false.B }
   when (s3_latch) { s3_valid_d := s2_need_d }
-  when (s3_latch) { s3_full := Bool(true) }
+  when (s3_latch) { s3_full := true.B }
 
   params.ccover(s3_valid && !s4_ready, "SOURCED_3_STALL", "Stage 3 pipeline blocked")
 
@@ -577,7 +578,7 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   // Writeback updated data
 
   val s4_latch = s3_valid && s3_retires && s4_ready
-  val s4_full = RegInit(Bool(false))
+  val s4_full = RegInit(false.B)
   val s4_beat = RegEnable(s3_beat, s4_latch)
   val s4_need_r = RegEnable(s3_need_r, s4_latch)
   val s4_uncached_get = RegEnable(s3_uncached_get, s4_latch)
@@ -596,12 +597,13 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   }
 
   val atomics = Module(new AtomicsLocal(params.inner.bundle))
+  atomics.io := DontCare
   atomics.io.write     := s4_req.prio(2)
   atomics.io.a.opcode  := s4_adjusted_opcode
   atomics.io.a.param   := s4_req.param
-  atomics.io.a.size    := UInt(0)
-  atomics.io.a.source  := UInt(0)
-  atomics.io.a.address := UInt(0)
+  atomics.io.a.size    := 0.U
+  atomics.io.a.source  := 0.U
+  atomics.io.a.address := 0.U
   atomics.io.a.mask    := s4_pdata.mask
   atomics.io.a.data    := s4_pdata.data
   atomics.io.data_in   := s4_rdata
@@ -629,7 +631,7 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
       atomics_io_data_out)
 
   io.bs_wadr.valid := s4_full && s4_need_bs
-  io.bs_wadr.bits.noop := Bool(false)
+  io.bs_wadr.bits.noop := false.B
   io.bs_wadr.bits.way  := s4_req.way
   io.bs_wadr.bits.set  := s4_req.set
   io.bs_wadr.bits.beat := s4_beat
@@ -648,8 +650,8 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   params.ccover(s4_req.prio(0) && s4_req.opcode === LogicalData    && s4_req.param === AND,  "SOURCED_4_ATOMIC_AND",  "Evaluated a bitwise AND atomic")
   params.ccover(s4_req.prio(0) && s4_req.opcode === LogicalData    && s4_req.param === SWAP, "SOURCED_4_ATOMIC_SWAP", "Evaluated a bitwise SWAP atomic")
 
-  when (TrackWire(io.bs_wadr.ready) || !s4_need_bs) { s4_full := Bool(false) }
-  when (s4_latch) { s4_full := Bool(true) }
+  when (TrackWire(io.bs_wadr.ready) || !s4_need_bs) { s4_full := false.B }
+  when (s4_latch) { s4_full := true.B }
 
   s4_ready := !s3_retires || !s4_full || TrackWire(io.bs_wadr.ready) || !s4_need_bs
 
@@ -727,9 +729,9 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
 
 
 
-  val pre_s3_4_bypass = Mux(pre_s3_4_match, MaskGen(pre_s4_req.offset, pre_s4_req.size, beatBytes, writeBytes), UInt(0))
-  val pre_s3_5_bypass = Mux(pre_s3_5_match, MaskGen(pre_s5_req.offset, pre_s5_req.size, beatBytes, writeBytes), UInt(0))
-  val pre_s3_6_bypass = Mux(pre_s3_6_match, MaskGen(pre_s6_req.offset, pre_s6_req.size, beatBytes, writeBytes), UInt(0))
+  val pre_s3_4_bypass = Mux(pre_s3_4_match, MaskGen(pre_s4_req.offset, pre_s4_req.size, beatBytes, writeBytes), 0.U)
+  val pre_s3_5_bypass = Mux(pre_s3_5_match, MaskGen(pre_s5_req.offset, pre_s5_req.size, beatBytes, writeBytes), 0.U)
+  val pre_s3_6_bypass = Mux(pre_s3_6_match, MaskGen(pre_s6_req.offset, pre_s6_req.size, beatBytes, writeBytes), 0.U)
 
 
   s3_bypass_data :=
@@ -746,16 +748,16 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   val s1_4_match  = s4_req.set === s1_req.set && s4_req.way === s1_req.way && s4_beat === s1_beat && s4_full && !s1_uncached_get && !s4_uncached_get
 
   for (i <- 0 until 8) {
-    val cover = UInt(i)
+    val cover = i.U
     val s2 = s1_2_match === cover(0)
     val s3 = s1_3_match === cover(1)
     val s4 = s1_4_match === cover(2)
     params.ccover(io.req.valid && s2 && s3 && s4, "SOURCED_BYPASS_CASE_" + i, "Bypass data from all subsets of pipeline stages")
   }
 
-  val s1_2_bypass = Mux(s1_2_match, MaskGen(s2_req.offset, s2_req.size, beatBytes, writeBytes), UInt(0))
-  val s1_3_bypass = Mux(s1_3_match, MaskGen(s3_req.offset, s3_req.size, beatBytes, writeBytes), UInt(0))
-  val s1_4_bypass = Mux(s1_4_match, MaskGen(s4_req.offset, s4_req.size, beatBytes, writeBytes), UInt(0))
+  val s1_2_bypass = Mux(s1_2_match, MaskGen(s2_req.offset, s2_req.size, beatBytes, writeBytes), 0.U)
+  val s1_3_bypass = Mux(s1_3_match, MaskGen(s3_req.offset, s3_req.size, beatBytes, writeBytes), 0.U)
+  val s1_4_bypass = Mux(s1_4_match, MaskGen(s4_req.offset, s4_req.size, beatBytes, writeBytes), 0.U)
 
   s1_x_bypass := s1_2_bypass | s1_3_bypass | s1_4_bypass
 

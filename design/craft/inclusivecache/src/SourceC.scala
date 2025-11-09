@@ -17,17 +17,18 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 import freechips.rocketchip.tilelink._
 
 class SourceCRequest(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val opcode = UInt(width = 3)
-  val param  = UInt(width = 3)
-  val source = UInt(width = params.outer.bundle.sourceBits)
-  val tag    = UInt(width = params.tagBits)
-  val set    = UInt(width = params.setBits)
-  val way    = UInt(width = params.wayBits)
+  val opcode = UInt(3.W)
+  val param  = UInt(3.W)
+  val source = UInt(params.outer.bundle.sourceBits.W)
+  val tag    = UInt(params.tagBits.W)
+  val set    = UInt(params.setBits.W)
+  val way    = UInt(params.wayBits.W)
   val dirty  = Bool()
   def dump() = {
     DebugPrint(params, "SourceCRequest: opcode: %x param: %x source: %x tag: %x set: %x way: %x dirty: %b addr %x\n",
@@ -37,17 +38,17 @@ class SourceCRequest(params: InclusiveCacheParameters) extends InclusiveCacheBun
 
 class SourceC(params: InclusiveCacheParameters) extends Module with HasTLDump
 {
-  val io = new Bundle {
-    val req = Decoupled(new SourceCRequest(params)).flip
+  val io = IO(new Bundle {
+    val req = Flipped(Decoupled(new SourceCRequest(params)))
     val c = Decoupled(new TLBundleC(params.outer.bundle))
     // BankedStore port
     val bs_adr = Decoupled(new BankedStoreOuterAddress(params))
-    val bs_dat = new BankedStoreOuterDecoded(params).flip
+    val bs_dat = Flipped(new BankedStoreOuterDecoded(params))
     // RaW hazard
     val evict_req = new SourceDHazard(params)
-    val evict_safe = Bool().flip
+    val evict_safe = Flipped(Bool())
     val s_select = Input(Bool())
-  }
+  })
 
   when (io.req.fire) {
     DebugPrint(params, "SourceC req ")
@@ -86,32 +87,32 @@ class SourceC(params: InclusiveCacheParameters) extends Module with HasTLDump
   val flow = params.micro.outerBuf.c.flow
   // 这边创建了一个queue，然后空间是拍数加3？
   // 估计是把结果放到queue里？why？
-  val queue = Module(new Queue(io.c.bits, beats + 3 + (if (flow) 0 else 1), flow = flow))
+  val queue = Module(new Queue(chiselTypeOf(io.c.bits), beats + 3 + (if (flow) 0 else 1), flow = flow))
 
   // queue.io.count is far too slow
   val fillBits = log2Up(beats + 4)
   // 估计fill就是我们自己维护的一个counter？
-  val fill = RegInit(UInt(0, width = fillBits))
-  val room = RegInit(Bool(true))
-  val room_safe = RegInit(Bool(true))
+  val fill = RegInit(0.U(fillBits.W))
+  val room = RegInit(true.B)
+  val room_safe = RegInit(true.B)
   // 如果enq和deq都fire了，那计数器肯定就不用变了
   when (queue.io.enq.fire =/= queue.io.deq.fire) {
     // enq那就加1，全1就是-1
-    fill := fill + Mux(queue.io.enq.fire, UInt(1), ~UInt(0, width = fillBits))
+    fill := fill + Mux(queue.io.enq.fire, 1.U(fillBits.W), ~0.U(fillBits.W))
     // room是empty的意思吗？
     // 估计是empty的意思？那fill 1还可以理解，fill 2就不太好理解了啊？
-    room := fill === UInt(0) || ((fill === UInt(1) || fill === UInt(2)) && !queue.io.enq.fire)
-    room_safe := fill === UInt(1) && queue.io.deq.fire
+    room := fill === 0.U || ((fill === 1.U || fill === 2.U) && !queue.io.enq.fire)
+    room_safe := fill === 1.U && queue.io.deq.fire
   }
-  assert (room === queue.io.count <= UInt(1))
+  assert (room === queue.io.count <= 1.U)
   assert(!room_safe || room, "room_safe valid cycles should be a subset of room")
 
   // room是个什么鬼东西？
 
-  val busy = RegInit(Bool(false))
+  val busy = RegInit(false.B)
   // beat是用来计数总共到了第多少个beat的
   // 所以beat到底是睁着书
-  val beat = RegInit(UInt(0, width = params.outerBeatBits))
+  val beat = RegInit(0.U(params.outerBeatBits.W))
   // last是全1，就是到了最后一个？
   val last = beat.andR
   // 这个就是req，从第一拍到最后一拍就可以用
@@ -133,21 +134,21 @@ class SourceC(params: InclusiveCacheParameters) extends Module with HasTLDump
   // 那可能一开始是传进来evict safe然后就开始
   // 等开始后，后面的就是根据beat来？
   io.bs_adr.valid := (beat.orR || io.evict_safe) && want_data
-  io.bs_adr.bits.noop := Bool(false)
+  io.bs_adr.bits.noop := false.B
   io.bs_adr.bits.way  := req.way
   io.bs_adr.bits.set  := req.set
   io.bs_adr.bits.beat := beat
-  io.bs_adr.bits.mask := ~UInt(0, width = params.outerMaskBits)
+  io.bs_adr.bits.mask := ~0.U(params.outerMaskBits.W)
 
   params.ccover(io.req.valid && io.req.bits.dirty && room && !io.evict_safe, "SOURCEC_HAZARD", "Prevented Eviction data hazard with backpressure")
   params.ccover(io.bs_adr.valid && !io.bs_adr.ready, "SOURCEC_SRAM_STALL", "Data SRAM busy")
 
   // 如果是要写回的块儿，才会dirty
-  when (io.req.valid && room && io.req.bits.dirty) { busy := Bool(true) }
+  when (io.req.valid && room && io.req.bits.dirty) { busy := true.B }
   // 等到最后一个时，busy才会变成false
   when (io.bs_adr.fire) {
-    when (last) { busy := Bool(false) }
-    beat := beat + UInt(1)
+    when (last) { busy := false.B }
+    beat := beat + 1.U
   }
 
   // 似乎假如不want data的话，似乎也能进C，就是直接给权限之类的了
@@ -163,15 +164,15 @@ class SourceC(params: InclusiveCacheParameters) extends Module with HasTLDump
   val s3_beat = RegEnable(s2_beat, s3_latch)
   val s3_last = RegEnable(s2_last, s3_latch)
 
-  val c = Wire(io.c)
+  val c = Wire(chiselTypeOf(io.c))
   c.valid        := s3_valid
   c.bits.opcode  := s3_req.opcode
   c.bits.param   := s3_req.param
-  c.bits.size    := UInt(params.offsetBits)
+  c.bits.size    := params.offsetBits.U
   c.bits.source  := s3_req.source
-  c.bits.address := params.expandAddress(s3_req.tag, s3_req.set, UInt(0))
+  c.bits.address := params.expandAddress(s3_req.tag, s3_req.set, 0.U)
   c.bits.data    := io.bs_dat.data
-  c.bits.corrupt := Bool(false)
+  c.bits.corrupt := false.B
 
   // We never accept at the front-end unless we're sure things will fit
   assert(!c.valid || c.ready)

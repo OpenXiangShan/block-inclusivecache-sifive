@@ -17,16 +17,17 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 import freechips.rocketchip.tilelink._
 
 class SourceARequest(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val tag    = UInt(width = params.tagBits)
-  val set    = UInt(width = params.setBits)
-  val param  = UInt(width = 3)
-  val source = UInt(width = params.outer.bundle.sourceBits)
-  val opcode = UInt(width = 3)
+  val tag    = UInt(params.tagBits.W)
+  val set    = UInt(params.setBits.W)
+  val param  = UInt(3.W)
+  val source = UInt(params.outer.bundle.sourceBits.W)
+  val opcode = UInt(3.W)
   def dump() = {
     DebugPrint(params, "SourceARequest: opcode: %d tag: %x set: %x param: %x source: %x\n",
       opcode, tag, set, param, source)
@@ -35,10 +36,10 @@ class SourceARequest(params: InclusiveCacheParameters) extends InclusiveCacheBun
 
 class SourceA(params: InclusiveCacheParameters) extends Module with HasTLDump
 {
-  val io = new Bundle {
-    val req = Decoupled(new SourceARequest(params)).flip
+  val io = IO(new Bundle {
+    val req = Flipped(Decoupled(new SourceARequest(params)))
     val a = Decoupled(new TLBundleA(params.outer.bundle))
-  }
+  })
 
   /*
   when (io.a.fire) {
@@ -55,7 +56,8 @@ class SourceA(params: InclusiveCacheParameters) extends Module with HasTLDump
   // ready must be a register, because we derive valid from ready
   require (!params.micro.outerBuf.a.pipe && params.micro.outerBuf.a.isDefined)
 
-  val a = Wire(io.a)
+  val a = Wire(chiselTypeOf(io.a))
+  a := DontCare
   io.a <> params.micro.outerBuf.a(a)
 
   io.req.ready := a.ready
@@ -64,9 +66,9 @@ class SourceA(params: InclusiveCacheParameters) extends Module with HasTLDump
 
   a.bits.opcode  := io.req.bits.opcode
   a.bits.param   := io.req.bits.param
-  a.bits.size    := UInt(params.offsetBits)
+  a.bits.size    := params.offsetBits.U
   a.bits.source  := io.req.bits.source
-  a.bits.address := params.expandAddress(io.req.bits.tag, io.req.bits.set, UInt(0))
-  a.bits.mask    := ~UInt(0, width = params.outer.manager.beatBytes)
-  a.bits.data    := UInt(0)
+  a.bits.address := params.expandAddress(io.req.bits.tag, io.req.bits.set, 0.U)
+  a.bits.mask    := ~0.U(params.outer.manager.beatBytes.W)
+  a.bits.data    := 0.U
 }

@@ -17,17 +17,18 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
 
 class SinkCResponse(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
   val last   = Bool()
-  val set    = UInt(width = params.setBits)
-  val tag    = UInt(width = params.tagBits)
-  val source = UInt(width = params.inner.bundle.sourceBits)
-  val param  = UInt(width = 3)
+  val set    = UInt(params.setBits.W)
+  val tag    = UInt(params.tagBits.W)
+  val source = UInt(params.inner.bundle.sourceBits.W)
+  val param  = UInt(3.W)
   val data   = Bool()
   def dump() = {
     DebugPrint(params, "SinkCResponse: set: %x tag: %x source: %x param: %x data: %b last: %b\n",
@@ -37,7 +38,7 @@ class SinkCResponse(params: InclusiveCacheParameters) extends InclusiveCacheBund
 
 class PutBufferCEntry(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val data = UInt(width = params.inner.bundle.dataBits)
+  val data = UInt(params.inner.bundle.dataBits.W)
   val corrupt = Bool()
   def dump() = {
     DebugPrint(params, "PutBufferCEntry: data: %x corrupt: %b\n",
@@ -47,20 +48,20 @@ class PutBufferCEntry(params: InclusiveCacheParameters) extends InclusiveCacheBu
 
 class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
 {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     val req = Decoupled(new FullRequest(params)) // Release
     val resp = Valid(new SinkCResponse(params)) // ProbeAck
-    val c = Decoupled(new TLBundleC(params.inner.bundle)).flip
+    val c = Flipped(Decoupled(new TLBundleC(params.inner.bundle)))
     // Find 'way' via MSHR CAM lookup
-    val set = UInt(width = params.setBits)
-    val way = UInt(width = params.wayBits).flip
+    val set = UInt(params.setBits.W)
+    val way = Flipped(UInt(params.wayBits.W))
     // ProbeAck write-back
     val bs_adr = Decoupled(new BankedStoreInnerAddress(params))
     val bs_dat = new BankedStoreInnerPoison(params)
     // SourceD sideband
-    val rel_pop  = Decoupled(new PutBufferPop(params)).flip
+    val rel_pop  = Flipped(Decoupled(new PutBufferPop(params)))
     val rel_beat = new PutBufferCEntry(params)
-  }
+  })
 
   when (io.req.fire) {
     DebugPrint(params, "sinkC req ")
@@ -104,12 +105,12 @@ class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
 
   if (params.firstLevel) {
     // Tie off unused ports
-    io.req.valid := Bool(false)
-    io.resp.valid := Bool(false)
-    io.c.ready := Bool(true)
-    io.set := UInt(0)
-    io.bs_adr.valid := Bool(false)
-    io.rel_pop.ready := Bool(true)
+    io.req.valid := false.B
+    io.resp.valid := false.B
+    io.c.ready := true.B
+    io.set := 0.U
+    io.bs_adr.valid := false.B
+    io.rel_pop.ready := true.B
   } else {
     // No restrictions on the type of buffer
     val c = params.micro.innerBuf.c(io.c)
@@ -137,7 +138,7 @@ class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
     // Cut path from inner C to the BankedStore SRAM setup
     //   ... this makes it easier to layout the L2 data banks far away
     //   啥啥啥？这个似乎是实现有关的？
-    val bs_adr = Wire(io.bs_adr)
+    val bs_adr = Wire(chiselTypeOf(io.bs_adr))
     io.bs_adr <> Queue(bs_adr, 1, pipe=true)
     io.bs_dat.data   := RegEnable(c.bits.data,    bs_adr.fire)
     bs_adr.valid     := resp && (!first || (c.valid && hasData))
@@ -145,7 +146,7 @@ class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
     bs_adr.bits.way  := io.way
     bs_adr.bits.set  := io.set
     bs_adr.bits.beat := Mux(c.valid, beat, RegEnable(beat + bs_adr.ready.asUInt, c.valid))
-    bs_adr.bits.mask := ~UInt(0, width = params.innerMaskBits)
+    bs_adr.bits.mask := ~0.U(params.innerMaskBits.W)
     params.ccover(bs_adr.valid && !bs_adr.ready, "SINKC_SRAM_STALL", "Data SRAM busy")
 
     io.resp.valid := resp && c.valid && (first || last) && (!hasData || bs_adr.ready)
@@ -157,10 +158,10 @@ class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
     io.resp.bits.data   := hasData
 
     val putbuffer = Module(new ListBuffer(ListBufferParameters(new PutBufferCEntry(params), params.relLists, params.relBeats, false)))
-    val lists = RegInit(UInt(0, width = params.relLists))
+    val lists = RegInit(0.U(params.relLists.W))
 
-    val lists_set = Wire(init = UInt(0, width = params.relLists))
-    val lists_clr = Wire(init = UInt(0, width = params.relLists))
+    val lists_set = WireInit(0.U(params.relLists.W))
+    val lists_clr = WireInit(0.U(params.relLists.W))
     lists := (lists | lists_set) & ~lists_clr
 
     val free = !lists.andR
@@ -183,8 +184,8 @@ class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
 
     val put = Mux(first, freeIdx, RegEnable(freeIdx, first))
 
-    io.req.bits.prio   := Vec(UInt(4, width=3).asBools)
-    io.req.bits.control:= Bool(false)
+    io.req.bits.prio   := 4.U(3.W).asBools
+    io.req.bits.control:= false.B
     io.req.bits.opcode := c.bits.opcode
     io.req.bits.param  := c.bits.param
     io.req.bits.size   := c.bits.size

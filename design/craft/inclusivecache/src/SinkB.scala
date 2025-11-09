@@ -17,15 +17,17 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 import freechips.rocketchip.tilelink._
 
 class SinkB(params: InclusiveCacheParameters) extends Module with HasTLDump
 {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     val req = Decoupled(new FullRequest(params))
-    val b = Decoupled(new TLBundleB(params.outer.bundle)).flip
-  }
+    val b = Flipped(Decoupled(new TLBundleB(params.outer.bundle)))
+  })
+  io.req := DontCare
 
   when (io.req.fire) {
     DebugPrint(params, "sinkB req ")
@@ -47,8 +49,8 @@ class SinkB(params: InclusiveCacheParameters) extends Module with HasTLDump
   io.req.valid := b.valid
   params.ccover(b.valid && !b.ready, "SINKB_STALL", "Backpressure when accepting a probe message")
 
-  io.req.bits.prio   := Vec(UInt(2, width=3).asBools)
-  io.req.bits.control:= Bool(false)
+  io.req.bits.prio   := 2.U(3.W).asBools
+  io.req.bits.control:= false.B
   io.req.bits.opcode := b.bits.opcode
   io.req.bits.param  := b.bits.param
   io.req.bits.size   := b.bits.size

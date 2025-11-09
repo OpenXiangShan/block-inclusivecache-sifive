@@ -17,14 +17,15 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
 
 class PutBufferAEntry(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val data = UInt(width = params.inner.bundle.dataBits)
-  val mask = UInt(width = params.inner.bundle.dataBits/8)
+  val data = UInt(params.inner.bundle.dataBits.W)
+  val mask = UInt((params.inner.bundle.dataBits/8).W)
   val corrupt = Bool()
   def dump() = {
     DebugPrint(params, "PutBufferAEntry: data: %x mask: %x corrupt: %b\n",
@@ -34,7 +35,7 @@ class PutBufferAEntry(params: InclusiveCacheParameters) extends InclusiveCacheBu
 
 class PutBufferPop(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val index = UInt(width = params.putBits)
+  val index = UInt(params.putBits.W)
   val last = Bool()
   def dump() = {
     DebugPrint(params, "PutBufferAEntry: index: %x last: %b\n",
@@ -44,13 +45,13 @@ class PutBufferPop(params: InclusiveCacheParameters) extends InclusiveCacheBundl
 
 class SinkA(params: InclusiveCacheParameters) extends Module with HasTLDump
 {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     val req = Decoupled(new FullRequest(params))
-    val a = Decoupled(new TLBundleA(params.inner.bundle)).flip
+    val a = Flipped(Decoupled(new TLBundleA(params.inner.bundle)))
     // for use by SourceD:
-    val pb_pop  = Decoupled(new PutBufferPop(params)).flip
+    val pb_pop  = Flipped(Decoupled(new PutBufferPop(params)))
     val pb_beat = new PutBufferAEntry(params)
-  }
+  })
 
   when (io.req.fire) {
     DebugPrint(params, "sinkA req ")
@@ -81,12 +82,12 @@ class SinkA(params: InclusiveCacheParameters) extends Module with HasTLDump
   // 总共可以存放有putList个请求
   val putbuffer = Module(new ListBuffer(ListBufferParameters(new PutBufferAEntry(params), params.putLists, params.putBeats, false)))
   // 这个是标识了哪些list在working
-  val lists = RegInit(UInt(0, width = params.putLists))
+  val lists = RegInit(0.U(params.putLists.W))
 
   // lists_set轨迹是这一周期分配哪个list出去
   // lists_clr是这一周期有哪个lists被释放出去
-  val lists_set = Wire(init = UInt(0, width = params.putLists))
-  val lists_clr = Wire(init = UInt(0, width = params.putLists))
+  val lists_set = WireInit(0.U(params.putLists.W))
+  val lists_clr = WireInit(0.U(params.putLists.W))
   lists := (lists | lists_set) & ~lists_clr
 
   val free = !lists.andR
@@ -127,8 +128,8 @@ class SinkA(params: InclusiveCacheParameters) extends Module with HasTLDump
   val put = Mux(first, freeIdx, RegEnable(freeIdx, first))
 
   // acquire的prio是001
-  io.req.bits.prio   := Vec(UInt(1, width=3).asBools)
-  io.req.bits.control:= Bool(false)
+  io.req.bits.prio   := 1.U(3.W).asBools
+  io.req.bits.control:= false.B
   io.req.bits.opcode := a.bits.opcode
   io.req.bits.param  := a.bits.param
   io.req.bits.size   := a.bits.size

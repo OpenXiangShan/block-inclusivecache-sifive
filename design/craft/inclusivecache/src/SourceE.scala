@@ -17,12 +17,13 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 import freechips.rocketchip.tilelink._
 
 class SourceERequest(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val sink = UInt(width = params.outer.bundle.sinkBits)
+  val sink = UInt(params.outer.bundle.sinkBits.W)
   def dump() = {
     DebugPrint(params, "SourceERequest: sink: %x\n", sink)
   }
@@ -30,10 +31,10 @@ class SourceERequest(params: InclusiveCacheParameters) extends InclusiveCacheBun
 
 class SourceE(params: InclusiveCacheParameters) extends Module with HasTLDump
 {
-  val io = new Bundle {
-    val req = Decoupled(new SourceERequest(params)).flip
+  val io = IO(new Bundle {
+    val req = Flipped(Decoupled(new SourceERequest(params)))
     val e = Decoupled(new TLBundleE(params.outer.bundle))
-  }
+  })
 
   when (io.req.fire) {
     DebugPrint(params, "sourceE req ")
@@ -50,7 +51,7 @@ class SourceE(params: InclusiveCacheParameters) extends Module with HasTLDump
   // ready must be a register, because we derive valid from ready
   require (!params.micro.outerBuf.e.pipe && params.micro.outerBuf.e.isDefined)
 
-  val e = Wire(io.e)
+  val e = Wire(chiselTypeOf(io.e))
   io.e <> params.micro.outerBuf.e(e)
 
   io.req.ready := e.ready

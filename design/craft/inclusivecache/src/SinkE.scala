@@ -17,12 +17,13 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 import freechips.rocketchip.tilelink._
 
 class SinkEResponse(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val sink = UInt(width = params.inner.bundle.sinkBits)
+  val sink = UInt(params.inner.bundle.sinkBits.W)
   def dump() = {
     DebugPrint(params, "SinkEResponse: sink: %x\n", sink)
   }
@@ -30,10 +31,10 @@ class SinkEResponse(params: InclusiveCacheParameters) extends InclusiveCacheBund
 
 class SinkE(params: InclusiveCacheParameters) extends Module with HasTLDump
 {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     val resp = Valid(new SinkEResponse(params))
-    val e = Decoupled(new TLBundleE(params.inner.bundle)).flip
-  }
+    val e = Flipped(Decoupled(new TLBundleE(params.inner.bundle)))
+  })
 
   when (io.resp.fire) {
     DebugPrint(params, "sinkE resp: ")
@@ -49,13 +50,13 @@ class SinkE(params: InclusiveCacheParameters) extends Module with HasTLDump
 
   if (params.firstLevel) {
     // Tie off unused ports
-    io.resp.valid := Bool(false)
-    io.e.ready := Bool(true)
+    io.resp.valid := false.B
+    io.e.ready := true.B
   } else {
     // No restrictions on buffer
     val e = params.micro.innerBuf.e(io.e)
 
-    e.ready := Bool(true)
+    e.ready := true.B
     io.resp.valid := e.valid
     io.resp.bits.sink := e.bits.sink
   }

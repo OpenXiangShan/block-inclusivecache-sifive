@@ -17,15 +17,16 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 import freechips.rocketchip.tilelink._
 import TLMessages.{AccessAckData}
 import freechips.rocketchip.util._
 
 class GrantBufferDEntry(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val data = UInt(width = params.inner.bundle.dataBits)
-  val param = UInt(width = 3)
+  val data = UInt(params.inner.bundle.dataBits.W)
+  val param = UInt(3.W)
   def dump() = {
     DebugPrint(params, "GrantBufferDEntry: data: %x param: %x\n",
       data, param)
@@ -39,7 +40,7 @@ class GrantBufferDEntry(params: InclusiveCacheParameters) extends InclusiveCache
 // Suitable for sub-block level get
 class GrantBufferAllocate(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val index = UInt(width = params.putBits)
+  val index = UInt(params.putBits.W)
   def dump() = {
     DebugPrint(params, "GrantBufferAllocate: index: %d\n", index)
   }
@@ -48,10 +49,10 @@ class GrantBufferAllocate(params: InclusiveCacheParameters) extends InclusiveCac
 class GrantBufferPush(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
   val nBeats = params.cache.blockBytes * 8 / params.inner.bundle.dataBits
-  val index = UInt(width = params.putBits)
-  val beat = UInt(width = log2Up(nBeats))
-  val data = UInt(width = params.inner.bundle.dataBits)
-  val param = UInt(width = 3)
+  val index = UInt(params.putBits.W)
+  val beat = UInt(log2Up(nBeats).W)
+  val data = UInt(params.inner.bundle.dataBits.W)
+  val param = UInt(3.W)
   def dump() = {
     DebugPrint(params, "GrantBufferPush: index: %d beat: %d data: %x param: %x\n",
       index, beat, data, param)
@@ -62,8 +63,8 @@ class GrantBufferPop(params: InclusiveCacheParameters) extends InclusiveCacheBun
 {
   val nBeats = params.cache.blockBytes * 8 / params.inner.bundle.dataBits
 
-  val index = UInt(width = params.putBits)
-  val beat = UInt(width = log2Up(nBeats))
+  val index = UInt(params.putBits.W)
+  val beat = UInt(log2Up(nBeats).W)
   val last = Bool()
   def dump() = {
     DebugPrint(params, "GrantBufferPop: index: %d beat: %d last: %b\n",
@@ -73,20 +74,21 @@ class GrantBufferPop(params: InclusiveCacheParameters) extends InclusiveCacheBun
 
 class GrantBuffer(params: InclusiveCacheParameters) extends Module
 {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     val allocate = Decoupled(new GrantBufferAllocate(params))
-    val push = Decoupled(new GrantBufferPush(params)).flip
-    val pop = Decoupled(new GrantBufferPop(params)).flip
+    val push = Flipped(Decoupled(new GrantBufferPush(params)))
+    val pop = Flipped(Decoupled(new GrantBufferPop(params)))
     val beat = new GrantBufferDEntry(params)
-  }
+  })
+
   val nBeats = params.cache.blockBytes * 8 / params.inner.bundle.dataBits
-  val buffer = Reg(Vec(params.grantLists, Vec(nBeats, UInt(width = params.inner.bundle.dataBits))))
-  val param = Reg(Vec(params.grantLists, Vec(nBeats, UInt(width = 3))))
+  val buffer = Reg(Vec(params.grantLists, Vec(nBeats, UInt(params.inner.bundle.dataBits.W))))
+  val param = Reg(Vec(params.grantLists, Vec(nBeats, UInt(3.W))))
 
   // list allocation and free
-  val lists = RegInit(UInt(0, width = params.grantLists))
-  val lists_set = Wire(init = UInt(0, width = params.grantLists))
-  val lists_clr = Wire(init = UInt(0, width = params.grantLists))
+  val lists = RegInit(0.U(params.grantLists.W))
+  val lists_set = WireInit(0.U(params.grantLists.W))
+  val lists_clr = WireInit(0.U(params.grantLists.W))
   lists := (lists | lists_set) & ~lists_clr
 
   val free = !lists.andR
@@ -141,12 +143,12 @@ class GrantBuffer(params: InclusiveCacheParameters) extends Module
 class SinkDResponse(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
   val last   = Bool()
-  val opcode = UInt(width = 3)
-  val param  = UInt(width = 3)
-  val source = UInt(width = params.outer.bundle.sourceBits)
-  val sink   = UInt(width = params.outer.bundle.sinkBits)
+  val opcode = UInt(3.W)
+  val param  = UInt(3.W)
+  val source = UInt(params.outer.bundle.sourceBits.W)
+  val sink   = UInt(params.outer.bundle.sinkBits.W)
   val denied = Bool()
-  val grant  = UInt(width = params.putBits)
+  val grant  = UInt(params.putBits.W)
   def dump() = {
     DebugPrint(params, "SinkDResponse: last: %b opcode: %x param: %x source: %x sink: %x denied: %b grant: %d\n",
       last, opcode, param, source, sink, denied, grant)
@@ -155,24 +157,24 @@ class SinkDResponse(params: InclusiveCacheParameters) extends InclusiveCacheBund
 
 class SinkD(params: InclusiveCacheParameters) extends Module with HasTLDump
 {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     val resp = Valid(new SinkDResponse(params)) // Grant or ReleaseAck
-    val d = Decoupled(new TLBundleD(params.outer.bundle)).flip
+    val d = Flipped(Decoupled(new TLBundleD(params.outer.bundle)))
     // Lookup the set+way from MSHRs
-    val source = UInt(width = params.outer.bundle.sourceBits)
-    val way    = UInt(width = params.wayBits).flip
-    val set    = UInt(width = params.setBits).flip
+    val source = UInt(params.outer.bundle.sourceBits.W)
+    val way    = Flipped(UInt(params.wayBits.W))
+    val set    = Flipped(UInt(params.setBits.W))
     // Banked Store port
     val bs_adr = Decoupled(new BankedStoreOuterAddress(params))
     val bs_dat = new BankedStoreOuterPoison(params)
     // WaR hazard
     val grant_req = new SourceDHazard(params)
-    val grant_safe = Bool().flip
+    val grant_safe = Flipped(Bool())
 
     // for use by SourceD:
-    val gb_pop  = Decoupled(new GrantBufferPop(params)).flip
+    val gb_pop  = Flipped(Decoupled(new GrantBufferPop(params)))
     val gb_beat = new GrantBufferDEntry(params)
-  }
+  })
 
   when (io.resp.fire) {
     DebugPrint(params, "sinkD resp ")
@@ -302,7 +304,7 @@ class SinkD(params: InclusiveCacheParameters) extends Module with HasTLDump
   io.bs_adr.bits.way  := io.way
   io.bs_adr.bits.set  := io.set
   io.bs_adr.bits.beat := Mux(d.valid, beat, RegEnable(beat + io.bs_adr.ready.asUInt, d.valid))
-  io.bs_adr.bits.mask := ~UInt(0, width = params.outerMaskBits)
+  io.bs_adr.bits.mask := ~0.U(params.outerMaskBits.W)
   io.bs_dat.data      := d.bits.data
 
   assert (!(d.valid && d.bits.corrupt && !d.bits.denied), "Data poisoning unsupported")

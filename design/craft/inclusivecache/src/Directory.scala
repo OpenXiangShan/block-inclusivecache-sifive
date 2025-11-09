@@ -17,7 +17,9 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
+import chisel3.util._
+import chisel3.experimental.dataview._
 import org.chipsalliance.cde.config._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
@@ -28,9 +30,9 @@ class DirectoryEntry(params: InclusiveCacheParameters) extends InclusiveCacheBun
 {
   val dirty   = Bool() // true => TRUNK or TIP
   val prefetch_hit = Bool() // true => TRUNK or TIP
-  val state   = UInt(width = params.stateBits)
-  val clients = UInt(width = params.clientBits)
-  val tag     = UInt(width = params.tagBits)
+  val state   = UInt(params.stateBits.W)
+  val clients = UInt(params.clientBits.W)
+  val tag     = UInt(params.tagBits.W)
   def dump() = {
     DebugPrint(params, "DirectoryEntry: dirty: %b state: %d clients: %x tag: %x\n",
       dirty, state, clients, tag)
@@ -39,8 +41,8 @@ class DirectoryEntry(params: InclusiveCacheParameters) extends InclusiveCacheBun
 
 class DirectoryWrite(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val set  = UInt(width = params.setBits)
-  val way  = UInt(width = params.wayBits)
+  val set  = UInt(params.setBits.W)
+  val way  = UInt(params.wayBits.W)
   val data = new DirectoryEntry(params)
   def dump() = {
     DebugPrint(params, "DirectoryWrite: set: %x way: %x data: \n",
@@ -51,8 +53,8 @@ class DirectoryWrite(params: InclusiveCacheParameters) extends InclusiveCacheBun
 
 class DirectoryRead(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val set = UInt(width = params.setBits)
-  val tag = UInt(width = params.tagBits)
+  val set = UInt(params.setBits.W)
+  val tag = UInt(params.tagBits.W)
   def dump() = {
     DebugPrint(params, "DirectoryRead: set: %x tag: %x\n",
       set, tag)
@@ -62,7 +64,7 @@ class DirectoryRead(params: InclusiveCacheParameters) extends InclusiveCacheBund
 class DirectoryResult(params: InclusiveCacheParameters) extends DirectoryEntry(params)
 {
   val hit = Bool()
-  val way = UInt(width = params.wayBits)
+  val way = UInt(params.wayBits.W)
   override def dump() = {
     DebugPrint(params, "DirectoryResult: dirty: %b state: %d clients: %x tag: %x hit: %b way: %x\n",
       dirty, state, clients, tag, hit, way)
@@ -71,12 +73,12 @@ class DirectoryResult(params: InclusiveCacheParameters) extends DirectoryEntry(p
 
 class Directory(params: InclusiveCacheParameters) extends Module
 {
-  val io = new Bundle {
-    val write  = Decoupled(new DirectoryWrite(params)).flip
-    val read   = Valid(new DirectoryRead(params)).flip // sees same-cycle write
+  val io = IO(new Bundle {
+    val write  = Flipped(Decoupled(new DirectoryWrite(params)))
+    val read   = Flipped(Valid(new DirectoryRead(params))) // sees same-cycle write
     val result = Valid(new DirectoryResult(params))
     val ready  = Bool() // reset complete; can enable access
-  }
+  })
 
   // dump
   when (io.write.fire) {
@@ -100,7 +102,7 @@ class Directory(params: InclusiveCacheParameters) extends Module
   val codeBits = new DirectoryEntry(params).getWidth
 
   val singlePort = true
-  val cc_dir = Module(new SRAMTemplate(UInt(width = codeBits), set=params.cache.sets, way=params.cache.ways,
+  val cc_dir = Module(new SRAMTemplate(UInt(codeBits.W), set=params.cache.sets, way=params.cache.ways,
     shouldReset=false, holdRead=false, singlePort=singlePort))
 
   val write = Queue(io.write, 1) // must inspect contents => max size 1
@@ -108,13 +110,13 @@ class Directory(params: InclusiveCacheParameters) extends Module
   // a pipe Q causes combinational loop through the scheduler
 
   // Wiping the Directory with 0s on reset has ultimate priority
-  val wipeCount = RegInit(UInt(0, width = params.setBits + 1))
-  val wipeOff = RegNext(Bool(false), Bool(true)) // don't wipe tags during reset
+  val wipeCount = RegInit(0.U((params.setBits + 1).W))
+  val wipeOff = RegNext(false.B, true.B) // don't wipe tags during reset
   val wipeDone = wipeCount(params.setBits)
   val wipeSet = wipeCount(params.setBits - 1,0)
 
   io.ready := wipeDone
-  when (!wipeDone && !wipeOff) { wipeCount := wipeCount + UInt(1) }
+  when (!wipeDone && !wipeOff) { wipeCount := wipeCount + 1.U }
   assert (wipeDone || !io.read.valid)
 
   // Be explicit for dumb 1-port inference
@@ -131,11 +133,11 @@ class Directory(params: InclusiveCacheParameters) extends Module
   cc_dir.io.w.req.valid := !ren && wen
   cc_dir.io.w.req.bits.apply(
     setIdx=Mux(wipeDone, write.bits.set, wipeSet),
-    data=Mux(wipeDone, write.bits.data.asUInt, UInt(0)),
+    data=Mux(wipeDone, write.bits.data.asUInt, 0.U),
     waymask=UIntToOH(write.bits.way, params.cache.ways) | Fill(params.cache.ways, !wipeDone))
 
-  val ren1 = RegInit(Bool(false))
-  val ren2 = if (params.micro.dirReg) RegInit(Bool(false)) else ren1
+  val ren1 = RegInit(false.B)
+  val ren2 = if (params.micro.dirReg) RegInit(false.B) else ren1
   ren2 := ren1
   ren1 := ren
 
@@ -153,16 +155,16 @@ class Directory(params: InclusiveCacheParameters) extends Module
   val replacer_array = Array.fill(params.cache.sets){
       ReplacementPolicy.fromString(params.cache.replacement, params.cache.ways)
   }
-  val victimWay = Vec(replacer_array.map(_.way))(set)
+  val victimWay = VecInit(replacer_array.map(_.way))(set)
 
   val setQuash = bypass_valid && bypass.set === set
   val tagMatch = bypass.data.tag === tag
   val wayMatch = bypass.way === victimWay
 
-  val ways = Vec(regout.map(d => new DirectoryEntry(params).fromBits(d)))
+  val ways = VecInit(regout.map(_.asTypeOf(new DirectoryEntry(params))))
   // 这边作为LLC，没有块儿权限之说，这里hit，不用检查权限
   val hits = Cat(ways.zipWithIndex.map { case (w, i) =>
-    w.tag === tag && w.state =/= INVALID && (!setQuash || UInt(i) =/= bypass.way)
+    w.tag === tag && w.state =/= INVALID && (!setQuash || i.U =/= bypass.way)
   }.reverse)
   val hit = hits.orR
   val hitWay = OHToUInt(hits)
@@ -187,7 +189,7 @@ class Directory(params: InclusiveCacheParameters) extends Module
   val write_deq_forward = write.valid && write.bits.set === set && write.bits.data.tag === tag
 
   io.result.valid := ren2
-  io.result.bits := Mux(hit,
+  io.result.bits.viewAsSupertype(chiselTypeOf(bypass.data)) := Mux(hit,
     Mux(setQuash && tagMatch,
       bypass.data,
       Mux(write_deq_forward,

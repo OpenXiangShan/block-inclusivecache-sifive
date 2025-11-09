@@ -17,24 +17,24 @@
 
 package sifive.blocks.inclusivecache
 
-import Chisel._
+import chisel3._
 
 class QueuedRequest(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
   val prio   = Vec(3, Bool()) // A=001, B=010, C=100
   val control= Bool() // control command
-  val opcode = UInt(width = 3)
-  val param  = UInt(width = 3)
-  val size   = UInt(width = params.inner.bundle.sizeBits)
-  val source = UInt(width = params.inner.bundle.sourceBits)
-  val tag    = UInt(width = params.tagBits)
-  val offset = UInt(width = params.offsetBits)
-  val put    = UInt(width = params.putBits)
+  val opcode = UInt(3.W)
+  val param  = UInt(3.W)
+  val size   = UInt(params.inner.bundle.sizeBits.W)
+  val source = UInt(params.inner.bundle.sourceBits.W)
+  val tag    = UInt(params.tagBits.W)
+  val offset = UInt(params.offsetBits.W)
+  val put    = UInt(params.putBits.W)
 }
 
 class FullRequest(params: InclusiveCacheParameters) extends QueuedRequest(params)
 {
-  val set = UInt(width = params.setBits)
+  val set = UInt(params.setBits.W)
   def dump() = {
     DebugPrint(params, "FullRequest: addr %x prio: %x control: %b opcode: %x param: %x size: %x source: %x tag: %x set: %x offset: %x put: %x\n",
       (tag << (params.setBits + params.offsetBits) | set << (params.offsetBits)), prio.asUInt, control, opcode, param, size, source, tag, set, offset, put)
