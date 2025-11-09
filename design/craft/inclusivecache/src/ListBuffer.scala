@@ -73,7 +73,7 @@ class ListBuffer[T <: Data](params: ListBufferParameters[T]) extends Module
 
   // 看是否还有空的entry
   io.push.ready := !used.andR
-  when (io.push.fire()) {
+  when (io.push.fire) {
     // 进入哪个queue
     valid_set := UIntToOH(io.push.bits.index, params.queues)
     // 需要把valid的哪一位，set的哪一位给set
@@ -96,14 +96,14 @@ class ListBuffer[T <: Data](params: ListBufferParameters[T]) extends Module
   io.valid := (if (!params.bypass) valid else (valid | valid_set))
 
   // It is an error to pop something that is not valid
-  assert (!io.pop.fire() || (io.valid)(io.pop.bits))
+  assert (!io.pop.fire || (io.valid)(io.pop.bits))
 
-  when (io.pop.fire()) {
+  when (io.pop.fire) {
     used_clr := UIntToOH(pop_head, params.entries)
     when (pop_head === tail.read(io.pop.bits)) {
       valid_clr := UIntToOH(io.pop.bits, params.queues)
     }
-    head.write(io.pop.bits, Mux(io.push.fire() && push_valid && push_tail === pop_head, freeIdx, next.read(pop_head)))
+    head.write(io.pop.bits, Mux(io.push.fire && push_valid && push_tail === pop_head, freeIdx, next.read(pop_head)))
   }
 
   // Empty bypass changes no state
@@ -145,7 +145,7 @@ class ListBufferLite[T <: Data](params: ListBufferParameters[T]) extends Module
   val push_ready_origin: UInt = ~valid(io.push.bits.index)
   io.push.ready := ~((valid & io.push_onehot_index).orR)
   assert(!io.push.valid || push_ready_origin === io.push.ready, "push valid %b index %x onehot %b valids %b orig %b", io.push.valid, io.push.bits.index, io.push_onehot_index, valid, push_ready_origin)
-  when (io.push.fire()) {
+  when (io.push.fire) {
     // 进入哪个queue
     valid_set := UIntToOH(io.push.bits.index, params.queues)
     // 数据局写入
@@ -165,9 +165,9 @@ class ListBufferLite[T <: Data](params: ListBufferParameters[T]) extends Module
   io.valid := valid
 
   // It is an error to pop something that is not valid
-  assert (!io.pop.fire() || (io.valid)(io.pop.bits))
+  assert (!io.pop.fire || (io.valid)(io.pop.bits))
 
-  when (io.pop.fire()) {
+  when (io.pop.fire) {
     valid_clr := UIntToOH(io.pop.bits, params.queues)
   }
 

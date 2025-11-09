@@ -126,50 +126,50 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
   io.in.d <> sourceD.io.d
   io.resp <> sourceX.io.x
 
-  when (io.in.a.fire()) {
+  when (io.in.a.fire) {
     DebugPrint(params, "inner acquire ")
     io.in.a.bits.dump(params)
   }
-  when (io.in.b.fire()) {
+  when (io.in.b.fire) {
     DebugPrint(params, "inner probe ")
     io.in.b.bits.dump(params)
   }
 
-  when (io.in.c.fire()) {
+  when (io.in.c.fire) {
     DebugPrint(params, "inner release ")
     io.in.c.bits.dump(params)
   }
 
-  when (io.in.d.fire()) {
+  when (io.in.d.fire) {
     DebugPrint(params, "inner grant ")
     io.in.d.bits.dump(params)
   }
 
-  when (io.in.e.fire()) {
+  when (io.in.e.fire) {
     DebugPrint(params, "inner finish ")
     io.in.e.bits.dump(params)
   }
 
-  when (io.out.a.fire()) {
+  when (io.out.a.fire) {
     DebugPrint(params, "outer acquire ")
     io.out.a.bits.dump(params)
   }
-  when (io.out.b.fire()) {
+  when (io.out.b.fire) {
     DebugPrint(params, "outer probe ")
     io.out.b.bits.dump(params)
   }
 
-  when (io.out.c.fire()) {
+  when (io.out.c.fire) {
     DebugPrint(params, "outer release ")
     io.out.c.bits.dump(params)
   }
 
-  when (io.out.d.fire()) {
+  when (io.out.d.fire) {
     DebugPrint(params, "outer grant ")
     io.out.d.bits.dump(params)
   }
 
-  when (io.out.e.fire()) {
+  when (io.out.e.fire) {
     DebugPrint(params, "outer finish ")
     io.out.e.bits.dump(params)
   }
@@ -226,7 +226,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
   val releaseReq = sourceC.io.req.bits
   // if we drop this block, we should inform prefetcher
   // we can not catch silent drop of B-state block
-  io.prefetcher.release.valid   := sourceC.io.req.fire() && (releaseReq.param === TLPermissions.BtoN || releaseReq.param === TLPermissions.TtoN)
+  io.prefetcher.release.valid   := sourceC.io.req.fire && (releaseReq.param === TLPermissions.BtoN || releaseReq.param === TLPermissions.TtoN)
   io.prefetcher.release.bits.address := params.expandAddress(releaseReq.tag, releaseReq.set, UInt(0))
 
   // connect MSHR performance counters
@@ -396,7 +396,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
   sourceX.io.req := schedule_issue.x
   directory.io.write := schedule_issue.dir
 
-  when (sourceC.io.req.fire()) {
+  when (sourceC.io.req.fire) {
     DebugPrint(params, "sourceC.fire mshr %d\n", RegNext(mshr_select))
   }
 
@@ -622,8 +622,8 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
 
   // Enqueue the request if not bypassed directly into an MSHR
   requests.io.push.valid := request.valid && queue && (s_issue && !bypassQueue)
-  when (requests.io.push.fire()) {
-    assert(request.fire())
+  when (requests.io.push.fire) {
+    assert(request.fire)
     DebugPrint(params, "requests push for mshr %d prio %b\n", OHToUInt(lowerMatches1), request.bits.prio.asUInt)
   }
   requests.io.push.bits.data  := request.bits
@@ -723,7 +723,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module with HasTLDump
   sourceC.io.evict_safe := sourceD.io.evict_safe
   sinkD  .io.grant_safe := sourceD.io.grant_safe
 
-  val setConflict = requests.io.push.fire()
+  val setConflict = requests.io.push.fire
   val mshrUseBypass = mshr_selectOH_issue.orR && bypass
   XSPerfAccumulate(params, "nSetConflict", setConflict)
   XSPerfAccumulate(params, "nMSHRBypass", mshrUseBypass)

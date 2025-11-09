@@ -27,18 +27,18 @@ class SinkB(params: InclusiveCacheParameters) extends Module with HasTLDump
     val b = Decoupled(new TLBundleB(params.outer.bundle)).flip
   }
 
-  when (io.req.fire()) {
+  when (io.req.fire) {
     DebugPrint(params, "sinkB req ")
     io.req.bits.dump
   }
 
   /*
-  when (io.b.fire()) {
+  when (io.b.fire) {
     DebugPrint(params, "inner probe ")
     io.b.bits.dump
   }
   */
-    
+
   val b = params.micro.innerBuf.b(io.b)
 
   val (tag, set, offset) = params.parseAddress(b.bits.address)

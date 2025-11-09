@@ -35,16 +35,16 @@ class SinkX(params: InclusiveCacheParameters) extends Module
     val x = Decoupled(new SinkXRequest(params)).flip
   }
 
-  when (io.req.fire()) {
+  when (io.req.fire) {
     DebugPrint(params, "sinkX req ")
     io.req.bits.dump
   }
 
-  when (io.x.fire()) {
+  when (io.x.fire) {
     DebugPrint(params, "sinkX X ")
     io.x.bits.dump
   }
-    
+
   val x = Queue(io.x, 1)
   val (tag, set, offset) = params.parseAddress(x.bits.address)
 

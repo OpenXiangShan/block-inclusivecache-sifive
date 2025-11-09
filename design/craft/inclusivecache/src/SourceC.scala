@@ -49,35 +49,35 @@ class SourceC(params: InclusiveCacheParameters) extends Module with HasTLDump
     val s_select = Input(Bool())
   }
 
-  when (io.req.fire()) {
+  when (io.req.fire) {
     DebugPrint(params, "SourceC req ")
     io.req.bits.dump
   }
 
   /*
-  when (io.c.fire()) {
+  when (io.c.fire) {
     DebugPrint(params, "outer release ")
     io.c.bits.dump
   }
   */
-    
-  when (io.bs_adr.fire()){
+
+  when (io.bs_adr.fire){
     DebugPrint(params, "SourceC bs_adr ")
     io.bs_adr.bits.dump
   }
-    
+
   /*
   DebugPrint(params, "SourceC bs_dat ")
   io.bs_dat.dump
-    
+
   DebugPrint(params, "SourceC evict_req ")
   io.evict_req.dump
-    
+
   when (io.evict_safe){
     DebugPrint(params, "SourceC evict_safe\n")
   }
   */
-    
+
   // We ignore the depth and pipe is useless here (we have to provision for worst-case=stall)
   require (!params.micro.outerBuf.c.pipe)
 
@@ -95,13 +95,13 @@ class SourceC(params: InclusiveCacheParameters) extends Module with HasTLDump
   val room = RegInit(Bool(true))
   val room_safe = RegInit(Bool(true))
   // 如果enq和deq都fire了，那计数器肯定就不用变了
-  when (queue.io.enq.fire() =/= queue.io.deq.fire()) {
+  when (queue.io.enq.fire =/= queue.io.deq.fire) {
     // enq那就加1，全1就是-1
-    fill := fill + Mux(queue.io.enq.fire(), UInt(1), ~UInt(0, width = fillBits))
+    fill := fill + Mux(queue.io.enq.fire, UInt(1), ~UInt(0, width = fillBits))
     // room是empty的意思吗？
     // 估计是empty的意思？那fill 1还可以理解，fill 2就不太好理解了啊？
-    room := fill === UInt(0) || ((fill === UInt(1) || fill === UInt(2)) && !queue.io.enq.fire())
-    room_safe := fill === UInt(1) && queue.io.deq.fire()
+    room := fill === UInt(0) || ((fill === UInt(1) || fill === UInt(2)) && !queue.io.enq.fire)
+    room_safe := fill === UInt(1) && queue.io.deq.fire
   }
   assert (room === queue.io.count <= UInt(1))
   assert(!room_safe || room, "room_safe valid cycles should be a subset of room")
@@ -145,13 +145,13 @@ class SourceC(params: InclusiveCacheParameters) extends Module with HasTLDump
   // 如果是要写回的块儿，才会dirty
   when (io.req.valid && room && io.req.bits.dirty) { busy := Bool(true) }
   // 等到最后一个时，busy才会变成false
-  when (io.bs_adr.fire()) {
+  when (io.bs_adr.fire) {
     when (last) { busy := Bool(false) }
     beat := beat + UInt(1)
   }
 
   // 似乎假如不want data的话，似乎也能进C，就是直接给权限之类的了
-  val s2_latch = Mux(want_data, io.bs_adr.fire(), io.req.fire())
+  val s2_latch = Mux(want_data, io.bs_adr.fire, io.req.fire)
   val s2_valid = RegNext(s2_latch)
   val s2_req = RegEnable(req, s2_latch)
   val s2_beat = RegEnable(beat, s2_latch)

@@ -52,19 +52,19 @@ class SinkA(params: InclusiveCacheParameters) extends Module with HasTLDump
     val pb_beat = new PutBufferAEntry(params)
   }
 
-  when (io.req.fire()) {
+  when (io.req.fire) {
     DebugPrint(params, "sinkA req ")
     io.req.bits.dump
   }
 
   /*
-  when (io.a.fire()) {
+  when (io.a.fire) {
     DebugPrint(params, "inner acquire ")
     io.a.bits.dump(params)
   }
   */
 
-  when (io.pb_pop.fire()){
+  when (io.pb_pop.fire){
     DebugPrint(params, "sinkA pb_pop ")
     io.pb_pop.bits.dump
   }
@@ -146,11 +146,11 @@ class SinkA(params: InclusiveCacheParameters) extends Module with HasTLDump
   // Grant access to pop the data
   // 当数据收集全了后，就要pop，这个数据是怎么pop出来的呢？是子写进去的吗？肯定不是，肯定还得有替换算法的。
   putbuffer.io.pop.bits := io.pb_pop.bits.index
-  putbuffer.io.pop.valid := io.pb_pop.fire()
+  putbuffer.io.pop.valid := io.pb_pop.fire
   io.pb_pop.ready := putbuffer.io.valid(io.pb_pop.bits.index)
   io.pb_beat := putbuffer.io.data
 
-  when (io.pb_pop.fire() && io.pb_pop.bits.last) {
+  when (io.pb_pop.fire && io.pb_pop.bits.last) {
     lists_clr := UIntToOH(io.pb_pop.bits.index, params.putLists)
   }
 }

@@ -41,13 +41,13 @@ class SourceB(params: InclusiveCacheParameters) extends Module with HasTLDump
   }
 
   /*
-  when (io.b.fire()) {
+  when (io.b.fire) {
     DebugPrint(params, "inner probe ")
     io.b.bits.dump
   }
   */
 
-  when (io.req.fire()) {
+  when (io.req.fire) {
     DebugPrint(params, "sourceB req ")
     io.req.bits.dump
   }
@@ -78,19 +78,19 @@ class SourceB(params: InclusiveCacheParameters) extends Module with HasTLDump
 
     io.req.ready := !busy
     // 这里是标注一下，有哪些client需要被probe
-    when (io.req.fire()) { remain_set := io.req.bits.clients }
+    when (io.req.fire) { remain_set := io.req.bits.clients }
 
     // No restrictions on the type of buffer used here
     val b = Wire(io.b)
     io.b <> params.micro.innerBuf.b(b)
 
     b.valid := busy || io.req.valid
-    when (b.fire()) { remain_clr := next }
+    when (b.fire) { remain_clr := next }
     params.ccover(b.valid && !b.ready, "SOURCEB_STALL", "Backpressured when issuing a probe")
 
-    val tag = Mux(!busy, io.req.bits.tag, RegEnable(io.req.bits.tag, io.req.fire()))
-    val set = Mux(!busy, io.req.bits.set, RegEnable(io.req.bits.set, io.req.fire()))
-    val param = Mux(!busy, io.req.bits.param, RegEnable(io.req.bits.param, io.req.fire()))
+    val tag = Mux(!busy, io.req.bits.tag, RegEnable(io.req.bits.tag, io.req.fire))
+    val set = Mux(!busy, io.req.bits.set, RegEnable(io.req.bits.set, io.req.fire))
+    val param = Mux(!busy, io.req.bits.param, RegEnable(io.req.bits.param, io.req.fire))
 
     b.bits.opcode  := TLMessages.Probe
     b.bits.param   := param

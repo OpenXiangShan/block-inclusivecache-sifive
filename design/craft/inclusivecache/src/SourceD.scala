@@ -160,19 +160,19 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
     val grant_safe = Bool()
   }
 
-  when (io.req.fire()) {
+  when (io.req.fire) {
     DebugPrint(params, "SourceD req:")
     io.req.bits.dump()
   }
 
   /*
-  when (io.d.fire()) {
+  when (io.d.fire) {
     DebugPrint(params, "inner grant:")
     io.d.bits.dump
   }
   */
 
-  when (io.pb_pop.fire()) {
+  when (io.pb_pop.fire) {
     DebugPrint(params, "SourceD pb_pop:")
     io.pb_pop.bits.dump()
   }
@@ -182,12 +182,12 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   io.pb_beat.dump()
   */
 
-  when (io.rel_pop.fire()) {
+  when (io.rel_pop.fire) {
     DebugPrint(params, "SourceD rel_pop:")
     io.rel_pop.bits.dump()
   }
 
-  when (io.gnt_pop.fire()) {
+  when (io.gnt_pop.fire) {
     DebugPrint(params, "SourceD gnt_pop:")
     io.gnt_pop.bits.dump()
   }
@@ -197,7 +197,7 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   io.rel_beat.dump()
   */
 
-  when (io.bs_radr.fire()) {
+  when (io.bs_radr.fire) {
     DebugPrint(params, "SourceD bs_radr:")
     io.bs_radr.bits.dump()
   }
@@ -208,7 +208,7 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   */
 
 
-  when (io.bs_wadr.fire()) {
+  when (io.bs_wadr.fire) {
     DebugPrint(params, "SourceD bs_wadr:")
     io.bs_wadr.bits.dump()
   }
@@ -372,14 +372,14 @@ class SourceD(params: InclusiveCacheParameters) extends Module with HasTLDump
   // 这个是flow queue了，所以数据是可以从头拉到尾巴的
   val queue = Module(new Queue(io.bs_rdat, 3, flow=true))
   // banked data store是延迟两拍后出数
-  queue.io.enq.valid := RegNext(RegNext(io.bs_radr.fire()))
+  queue.io.enq.valid := RegNext(RegNext(io.bs_radr.fire))
   queue.io.enq.bits := io.bs_rdat
   assert (!queue.io.enq.valid || queue.io.enq.ready)
 
   params.ccover(!queue.io.enq.ready, "SOURCED_1_QUEUE_FULL", "Filled SRAM skidpad queue completely")
 
   // s1_block_r是用来干啥的呢？
-  when (io.bs_radr.fire()) { s1_block_r := Bool(true) }
+  when (io.bs_radr.fire) { s1_block_r := Bool(true) }
   when (io.req.valid) { busy := Bool(true) }
   when (s1_valid && s2_ready) {
     // 已经读了一拍了，开始读到下一拍

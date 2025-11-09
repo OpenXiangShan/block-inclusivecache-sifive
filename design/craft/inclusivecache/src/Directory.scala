@@ -79,15 +79,15 @@ class Directory(params: InclusiveCacheParameters) extends Module
   }
 
   // dump
-  when (io.write.fire()) {
+  when (io.write.fire) {
     io.write.bits.dump()
   }
 
-  when (io.read.fire()) {
+  when (io.read.fire) {
     io.read.bits.dump()
   }
 
-  when (io.result.fire()) {
+  when (io.result.fire) {
     io.result.bits.dump()
   }
 
@@ -167,7 +167,7 @@ class Directory(params: InclusiveCacheParameters) extends Module
   val hit = hits.orR
   val hitWay = OHToUInt(hits)
 
-  val wen1 = RegNext(write.fire(), init = false.B)
+  val wen1 = RegNext(write.fire, init = false.B)
   val wen2 = if(params.micro.dirReg) RegNext(wen1, false.B) else wen1
   val writeWay1 = RegNext(write.bits.way)
   val writeWay2 = params.dirReg(writeWay1)

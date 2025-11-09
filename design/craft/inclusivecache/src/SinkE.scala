@@ -35,13 +35,13 @@ class SinkE(params: InclusiveCacheParameters) extends Module with HasTLDump
     val e = Decoupled(new TLBundleE(params.inner.bundle)).flip
   }
 
-  when (io.resp.fire()) {
+  when (io.resp.fire) {
     DebugPrint(params, "sinkE resp: ")
     io.resp.bits.dump()
   }
 
   /*
-  when (io.e.fire()) {
+  when (io.e.fire) {
     DebugPrint(params, "inner mem_finish: ")
     io.e.bits.dump
   }

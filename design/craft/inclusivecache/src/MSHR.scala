@@ -87,22 +87,22 @@ class ScheduleRequest(params: InclusiveCacheParameters) extends InclusiveCacheBu
   val reload = Bool() // get next request via allocate (if any)
 
   def dump() = {
-    when (a.fire()) {
+    when (a.fire) {
       a.bits.dump()
     }
-    when (b.fire()) {
+    when (b.fire) {
       b.bits.dump()
     }
-    when (c.fire()) {
+    when (c.fire) {
       c.bits.dump()
     }
-    when (d.fire()) {
+    when (d.fire) {
       d.bits.dump()
     }
-    when (e.fire()) {
+    when (e.fire) {
       e.bits.dump()
     }
-    when (x.fire()) {
+    when (x.fire) {
       x.bits.dump()
     }
     when (dir.valid) {
@@ -209,7 +209,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
     io.status.bits.dump()
   }
 
-  when (io.schedule.fire()) {
+  when (io.schedule.fire) {
     DebugPrint(params, "MSHR %d: schedule: ", io.mshr_id)
     io.schedule.bits.dump()
   }
@@ -851,7 +851,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   when (io.allocate.valid) {
     // allocate时要么是request not valid
     // 另外的条件是啥的？
-    assert (!request_valid || (no_wait && io.schedule.fire()))
+    assert (!request_valid || (no_wait && io.schedule.fire))
     request_valid := Bool(true)
     request := io.allocate.bits
 

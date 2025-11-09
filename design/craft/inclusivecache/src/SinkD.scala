@@ -96,19 +96,19 @@ class GrantBuffer(params: InclusiveCacheParameters) extends Module
   io.allocate.valid := free
   io.allocate.bits.index := freeIdx
 
-  when (io.allocate.fire()) {
+  when (io.allocate.fire) {
     lists_set := freeOH
   }
 
   // list free
-  when (io.pop.fire() && io.pop.bits.last) {
+  when (io.pop.fire && io.pop.bits.last) {
     lists_clr := UIntToOH(io.pop.bits.index, params.grantLists)
   }
 
   // push data beat
   val push = io.push.bits
   io.push.ready := true.B
-  when (io.push.fire()) {
+  when (io.push.fire) {
     buffer(push.index)(push.beat) := push.data
     param(push.index)(push.beat) := push.param
   }
@@ -118,21 +118,21 @@ class GrantBuffer(params: InclusiveCacheParameters) extends Module
   io.pop.ready := true.B
   io.beat.data := 0.U
   io.beat.param := 0.U
-  when (io.pop.fire()) {
+  when (io.pop.fire) {
     io.beat.data := buffer(pop.index)(pop.beat)
     io.beat.param := param(pop.index)(pop.beat)
   }
 
   // dump
-  when (io.allocate.fire()) {
+  when (io.allocate.fire) {
     io.allocate.bits.dump()
   }
 
-  when (io.push.fire()) {
+  when (io.push.fire) {
     io.push.bits.dump()
   }
 
-  when (io.pop.fire()) {
+  when (io.pop.fire) {
     io.pop.bits.dump()
     io.beat.dump()
   }
@@ -174,7 +174,7 @@ class SinkD(params: InclusiveCacheParameters) extends Module with HasTLDump
     val gb_beat = new GrantBufferDEntry(params)
   }
 
-  when (io.resp.fire()) {
+  when (io.resp.fire) {
     DebugPrint(params, "sinkD resp ")
     io.resp.bits.dump
   }
@@ -185,7 +185,7 @@ class SinkD(params: InclusiveCacheParameters) extends Module with HasTLDump
   require (innerBeatWidth >= outerBeatWidth)
 
   /*
-  when (io.d.fire()) {
+  when (io.d.fire) {
     DebugPrint(params, "outer grant ")
     io.d.bits.dump
   }
@@ -193,7 +193,7 @@ class SinkD(params: InclusiveCacheParameters) extends Module with HasTLDump
 
   // DebugPrint(params, "sinkD: source: %x set: %x way: %x\n", io.source, io.set, io.way)
 
-  when (io.bs_adr.fire()) {
+  when (io.bs_adr.fire) {
     DebugPrint(params, "sinkD bs_adr ")
     io.bs_adr.bits.dump
   }
@@ -210,7 +210,7 @@ class SinkD(params: InclusiveCacheParameters) extends Module with HasTLDump
   }
   */
 
-  when (io.gb_pop.fire()) {
+  when (io.gb_pop.fire) {
     DebugPrint(params, "sinkD gb_pop ")
     io.gb_pop.bits.dump
     DebugPrint(params, "sinkD gb_beat: %x ", io.gb_beat.data)
@@ -239,7 +239,7 @@ class SinkD(params: InclusiveCacheParameters) extends Module with HasTLDump
     way_set_valid := true.B
     DebugPrint(params, "wait way set pair next cycle\n")
   }
-  when (d.fire() && last) {
+  when (d.fire && last) {
     way_set_valid := false.B
     DebugPrint(params, "way_set_valid reset\n")
   }
@@ -277,7 +277,7 @@ class SinkD(params: InclusiveCacheParameters) extends Module with HasTLDump
   // 为什么只要在first和last时给valid？
   // 为什么都要not first呢？
   // 看来response只需要给两个，一个是开始，另一个是结束
-  io.resp.valid := (first || last) && d.fire()
+  io.resp.valid := (first || last) && d.fire
   io.resp.bits.last   := last
   io.resp.bits.opcode := d.bits.opcode
   io.resp.bits.param  := d.bits.param
@@ -314,20 +314,20 @@ class SinkD(params: InclusiveCacheParameters) extends Module with HasTLDump
   val splitBits = log2Floor(split)
   val beatIndex = if (splitBits == 0) 0.U else beat(splitBits - 1, 0)
   val beatFull = if (splitBits == 0) true.B else beatIndex === (split - 1).U
-  when (d.fire() && uncache && hasData) {
+  when (d.fire && uncache && hasData) {
     refill_data(beatIndex) := d.bits.data
   }
   val fullBeat = Cat((0 until split).reverse map { i => refill_data(i) })
 
-  grantbuffer.io.allocate.ready := d.fire() && uncache && hasData && first
+  grantbuffer.io.allocate.ready := d.fire && uncache && hasData && first
 
-  grantbuffer.io.push.valid := RegNext(next = d.fire() && uncache && hasData && beatFull, init = false.B)
+  grantbuffer.io.push.valid := RegNext(next = d.fire && uncache && hasData && beatFull, init = false.B)
   grantbuffer.io.push.bits.index := RegNext(grant)
   grantbuffer.io.push.bits.beat := RegNext(beat >> splitBits)
   grantbuffer.io.push.bits.data := fullBeat
   grantbuffer.io.push.bits.param := RegNext(d.bits.param)
 
-  when (d.fire()) {
+  when (d.fire) {
     DebugPrint(params, "sinkD first: %b uncache: %b hasData: %b beatFull: %b\n",
       first, uncache, hasData, beatFull)
   }

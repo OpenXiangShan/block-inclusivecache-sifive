@@ -35,18 +35,18 @@ class SourceE(params: InclusiveCacheParameters) extends Module with HasTLDump
     val e = Decoupled(new TLBundleE(params.outer.bundle))
   }
 
-  when (io.req.fire()) {
+  when (io.req.fire) {
     DebugPrint(params, "sourceE req ")
     io.req.bits.dump
   }
 
   /*
-  when (io.e.fire()) {
+  when (io.e.fire) {
     DebugPrint(params, "outer finish ")
     io.e.bits.dump
   }
   */
-    
+
   // ready must be a register, because we derive valid from ready
   require (!params.micro.outerBuf.e.pipe && params.micro.outerBuf.e.isDefined)
 

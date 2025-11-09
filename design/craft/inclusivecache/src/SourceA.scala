@@ -41,13 +41,13 @@ class SourceA(params: InclusiveCacheParameters) extends Module with HasTLDump
   }
 
   /*
-  when (io.a.fire()) {
+  when (io.a.fire) {
     DebugPrint(params, "outer acquire ")
     io.a.bits.dump
   }
   */
-    
-  when (io.req.fire()) {
+
+  when (io.req.fire) {
     DebugPrint(params, "sourceA req ")
     io.req.bits.dump
   }

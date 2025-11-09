@@ -62,19 +62,19 @@ class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
     val rel_beat = new PutBufferCEntry(params)
   }
 
-  when (io.req.fire()) {
+  when (io.req.fire) {
     DebugPrint(params, "sinkC req ")
     io.req.bits.dump
   }
 
-  when (io.resp.fire()) {
+  when (io.resp.fire) {
     DebugPrint(params, "sinkC resp ")
     io.resp.bits.dump
   }
 
 
   /*
-  when (io.c.fire()) {
+  when (io.c.fire) {
     DebugPrint(params, "inner release ")
     io.c.bits.dump
   }
@@ -82,7 +82,7 @@ class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
 
   // DebugPrint(params, "sinkC: set: %x way: %x\n", io.set, io.way)
 
-  when (io.bs_adr.fire()) {
+  when (io.bs_adr.fire) {
     DebugPrint(params, "sinkC bs_adr ")
     io.bs_adr.bits.dump
   }
@@ -92,7 +92,7 @@ class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
   io.bs_dat.dump
   */
 
-  when (io.rel_pop.fire()) {
+  when (io.rel_pop.fire) {
     DebugPrint(params, "sinkC rel_pop ")
     io.rel_pop.bits.dump
   }
@@ -139,7 +139,7 @@ class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
     //   啥啥啥？这个似乎是实现有关的？
     val bs_adr = Wire(io.bs_adr)
     io.bs_adr <> Queue(bs_adr, 1, pipe=true)
-    io.bs_dat.data   := RegEnable(c.bits.data,    bs_adr.fire())
+    io.bs_dat.data   := RegEnable(c.bits.data,    bs_adr.fire)
     bs_adr.valid     := resp && (!first || (c.valid && hasData))
     bs_adr.bits.noop := !c.valid
     bs_adr.bits.way  := io.way
@@ -200,11 +200,11 @@ class SinkC(params: InclusiveCacheParameters) extends Module with HasTLDump
 
     // Grant access to pop the data
     putbuffer.io.pop.bits := io.rel_pop.bits.index
-    putbuffer.io.pop.valid := io.rel_pop.fire()
+    putbuffer.io.pop.valid := io.rel_pop.fire
     io.rel_pop.ready := putbuffer.io.valid(io.rel_pop.bits.index)
     io.rel_beat := putbuffer.io.data
 
-    when (io.rel_pop.fire() && io.rel_pop.bits.last) {
+    when (io.rel_pop.fire && io.rel_pop.bits.last) {
       lists_clr := UIntToOH(io.rel_pop.bits.index, params.relLists)
     }
   }

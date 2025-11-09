@@ -36,12 +36,12 @@ class SourceX(params: InclusiveCacheParameters) extends Module
     val x = Decoupled(new SourceXRequest(params))
   }
 
-  when (io.req.fire()) {
+  when (io.req.fire) {
     DebugPrint(params, "SourceX req ")
     io.req.bits.dump
   }
 
-  when (io.x.fire()) {
+  when (io.x.fire) {
     DebugPrint(params, "SourceXRequest ")
     io.x.bits.dump
   }
